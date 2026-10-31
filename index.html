@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Pocket 6502</title>
+<meta name="description" content="A simple NES player for your phone.">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Pocket 6502">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+/* page reset (keeps content clear of the notch and home bar) */
+:root{padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)}
+[hidden]{display:none!important}
+img{max-width:100%}
+
+/* Same system as nesprite and nes-tracker: black, white 1px lines, monospace, square corners, inverted = active. Single dark theme by design. */
+:root{
+  --bg:#000000; --ink:#ffffff; --line:#ffffff; --muted:#999999; --soft:#666666; --press:#222222;
+  --font:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme:dark;
+}
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit;border-radius:0}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;overflow:hidden}
+button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;padding:9px 11px;cursor:pointer}
+button:active{background:var(--press)}
+button.on{background:var(--ink);color:#000;border-color:var(--ink);font-weight:700}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+button:disabled{opacity:.4;cursor:default}
+button[hidden]{display:none}
+.icon{display:inline-flex;align-items:center;justify-content:center;padding:8px}
+svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square}
+svg .fill{fill:currentColor;stroke:none}
+#app{height:100%;position:relative}
+.view{height:100%;padding-left:max(12px, env(safe-area-inset-left, 0px));padding-right:max(12px, env(safe-area-inset-right, 0px))}
+
+/* ---------- library ---------- */
+#library{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-block:0 48px}
+.lib-inner{max-width:640px;margin:0 auto}
+.lib-head{position:sticky;top:0;z-index:10;background:var(--bg);display:flex;align-items:center;gap:10px;
+  padding:14px 2px 12px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.lib-head h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.5px}
+.lib-head .acts{margin-left:auto;display:flex;gap:8px}
+.rom-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rom{display:grid;grid-template-columns:minmax(0,1fr) auto;border:1px solid var(--line)}
+.rom-play{border:0;text-align:left;padding:13px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.rom-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rom-warn{font-size:12px;color:var(--muted)}
+.rom-del{border:0;border-left:1px solid var(--line);padding:0 14px}
+.rom-list:not(.editing) .rom-del{display:none}
+.rom-list.editing .rom-play{pointer-events:none;color:var(--muted)}
+.note{margin:0 0 12px;font-size:12px;line-height:1.5;border:1px solid var(--line);padding:9px 11px}
+.add-big{width:100%;border:1px dashed var(--line);padding:36px 12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.add-big svg{width:28px;height:28px}
+.add-big small{color:var(--muted);font-size:12px}
+.drop{position:absolute;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);margin:12px;z-index:20}
+
+/* ---------- player ---------- */
+#player{display:grid;touch-action:none;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"screen screen" "dpad face" "meta meta";
+  padding-block:12px 14px;column-gap:8px;max-width:640px;margin:0 auto}
+.screen-cell{grid-area:screen;display:flex;justify-content:center;min-width:0}
+.stage{position:relative;width:100%;border:1px solid var(--line);background:#000}
+.glass{position:relative;width:100%;aspect-ratio:256/240;max-height:52dvh;margin:0 auto;background:#000}
+#screen{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+.flash{position:absolute;left:8px;top:8px;background:var(--bg);border:1px solid var(--line);padding:4px 8px;font-size:12px;pointer-events:none}
+
+/* controls: square, outlined, inverted while held */
+.dpad-cell{grid-area:dpad;display:flex;align-items:center;justify-content:center}
+.face-cell{grid-area:face;display:flex;align-items:center;justify-content:center}
+.meta-cell{grid-area:meta;display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center;gap:12px;padding-top:6px}
+.menu-btn{justify-self:start}
+.dpad{--s:min(42vw, 30dvh, 186px);position:relative;width:var(--s);height:var(--s)}
+.arm{position:absolute;background:var(--bg);border:1px solid var(--line);width:34%;height:34%;left:33%;top:33%}
+.arm.up{top:0;border-bottom:0}
+.arm.down{top:66%;border-top:0}
+.arm.left{left:0;border-right:0}
+.arm.right{left:66%;border-left:0}
+.arm.mid{border:0}
+.arm.on{background:var(--ink)}
+.arm.up::after,.arm.down::after,.arm.left::after,.arm.right::after{content:"";position:absolute;left:50%;top:50%;width:0;height:0;border:6px solid transparent;transform:translate(-50%,-50%)}
+.arm.up::after{border-bottom-color:var(--ink);margin-top:-3px}
+.arm.down::after{border-top-color:var(--ink);margin-top:3px}
+.arm.left::after{border-right-color:var(--ink);margin-left:-3px}
+.arm.right::after{border-left-color:var(--ink);margin-left:3px}
+.arm.up.on::after{border-bottom-color:#000}
+.arm.down.on::after{border-top-color:#000}
+.arm.left.on::after{border-right-color:#000}
+.arm.right.on::after{border-left-color:#000}
+.face{--k:min(19vw, 13dvh, 80px);position:relative;width:calc(var(--k)*2.25);height:calc(var(--k)*1.75)}
+.fbtn{position:absolute;width:var(--k);height:var(--k);border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--k)*.28);font-weight:700}
+.fbtn.b{left:0;bottom:4%}
+.fbtn.a{right:0;top:4%}
+.fbtn.on{background:var(--ink);color:#000}
+.mbtn{border:1px solid var(--line);width:96px;padding:8px 0;text-align:center;font-size:12px;letter-spacing:.5px}
+.mbtn.on{background:var(--ink);color:#000;font-weight:700}
+
+/* in-app modal, same as nesprite's confirmModal */
+.modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:24px;touch-action:none}
+.modal{background:var(--bg);border:1px solid var(--line);width:100%;max-width:360px;padding:18px}
+.modal-msg{margin:0 0 16px;line-height:1.5}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px}
+.modal-actions button{font-size:13px;padding:9px 16px}
+.modal-head{display:flex;align-items:center;gap:10px;margin:-6px -6px 14px 0;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.modal-title{flex:1;min-width:0;margin:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-head .icon{border:0}
+.menu-list{display:grid;grid-template-columns:repeat(6, 1fr);gap:8px}
+.menu-list .big{grid-column:span 3;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:700}
+.menu-list .big small{font-weight:400;color:var(--muted);font-size:11px;min-height:1.2em}
+.menu-list .icon{grid-column:span 2;padding:12px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.stack button{text-align:left;padding:12px}
+.help{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:12px;line-height:1.5}
+.help dt{font-weight:700}
+.help dd{margin:0;color:var(--muted)}
+
+/* controller plugged in: hide the on-screen pad, keep the menu button */
+#player.pad-mode{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;grid-template-areas:"screen" "meta" "."}
+#player.pad-mode .dpad-cell,#player.pad-mode .face-cell,#player.pad-mode .mbtn{display:none}
+#player.pad-mode .glass{max-height:62dvh}
+
+@media (orientation:landscape) and (max-height:560px){
+  #player{max-width:none;grid-template-columns:1fr auto 1fr;grid-template-rows:minmax(0,1fr) auto;
+    grid-template-areas:"dpad screen face" "dpad meta face";padding-block:8px}
+  .screen-cell{height:100%;min-height:0}
+  .stage{height:100%;width:auto;display:flex}
+  .glass{height:100%;width:auto;max-height:none}
+  .dpad{--s:min(30vw, 58dvh, 180px)}
+  .face{--k:min(13vw, 25dvh, 78px)}
+  #player.pad-mode{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"screen" "meta"}
+  #player.pad-mode .glass{max-height:none}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <section id="library" class="view" aria-label="Library">
+    <div class="lib-inner">
+      <header class="lib-head">
+        <h1>pocket 6502</h1>
+        <div class="acts">
+          <button id="addBtn" class="icon" type="button" aria-label="Add games" title="Add games"><svg viewBox="0 0 20 20"><path d="M10 3v14M3 10h14"/></svg></button>
+          <button id="moreBtn" class="icon" type="button" aria-label="More" title="More"><svg viewBox="0 0 20 20"><rect x="2.5" y="8.5" width="3" height="3" class="fill"/><rect x="8.5" y="8.5" width="3" height="3" class="fill"/><rect x="14.5" y="8.5" width="3" height="3" class="fill"/></svg></button>
+          <button id="doneBtn" class="on" type="button" hidden>done</button>
+        </div>
+      </header>
+      <p id="storeNote" class="note" hidden></p>
+      <ul id="romList" class="rom-list"></ul>
+      <button id="addBig" class="add-big" type="button" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
+        <span>add a game</span>
+        <small>.nes or .zip</small>
+      </button>
+    </div>
+    <input id="fileIn" type="file" multiple hidden>
+  </section>
+
+  <section id="player" class="view" aria-label="Player" hidden>
+    <div class="screen-cell">
+      <div class="stage">
+        <div class="glass">
+          <canvas id="screen" width="256" height="240"></canvas>
+          <div id="flash" class="flash" hidden></div>
+        </div>
+      </div>
+    </div>
+    <div class="dpad-cell">
+      <div id="dpad" class="dpad" aria-hidden="true">
+        <div class="arm up" data-b="up"></div>
+        <div class="arm down" data-b="down"></div>
+        <div class="arm left" data-b="left"></div>
+        <div class="arm right" data-b="right"></div>
+        <div class="arm mid"></div>
+      </div>
+    </div>
+    <div class="face-cell">
+      <div class="face" aria-hidden="true">
+        <div id="btnB" class="fbtn b" data-b="b">b</div>
+        <div id="btnA" class="fbtn a" data-b="a">a</div>
+      </div>
+    </div>
+    <div class="meta-cell">
+      <button id="menuBtn" class="icon menu-btn" type="button" aria-label="Menu" title="Menu"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
+      <div id="btnSelect" class="mbtn" data-b="select">select</div>
+      <div id="btnStart" class="mbtn" data-b="start">start</div>
+    </div>
+  </section>
+
+  <!-- pause menu -->
+  <div id="menu" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <div class="modal-head">
+        <p id="menuTitle" class="modal-title"></p>
+        <button id="menuClose" class="icon" type="button" aria-label="Resume" title="Resume"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
+      </div>
+      <div class="menu-list">
+        <button id="saveSlotBtn" class="big" type="button">save</button>
+        <button id="loadSlotBtn" class="big" type="button" disabled>load</button>
+        <button id="backBtn" class="icon" type="button" aria-label="Library" title="Library"><svg viewBox="0 0 20 20"><path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z"/></svg></button>
+        <button id="restartBtn" class="icon" type="button" aria-label="Restart" title="Restart"><svg viewBox="0 0 20 20"><path d="M14.24 5.76A6 6 0 1 0 16 10"/><path d="M14.5 2v4h-4"/></svg></button>
+        <button id="soundBtn" class="icon" type="button" aria-label="Sound" title="Sound"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- library options -->
+  <div id="more" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
+      <div class="modal-head">
+        <p id="moreTitle" class="modal-title">pocket 6502</p>
+        <button id="moreClose" class="icon" type="button" aria-label="Close" title="Close"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
+      </div>
+      <div class="stack">
+        <button id="editBtn" type="button">remove games</button>
+        <button id="helpBtn" type="button">help</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-head">
+        <p id="helpTitle" class="modal-title">help</p>
+        <button id="helpClose" class="icon" type="button" aria-label="Close" title="Close"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
+      </div>
+      <dl class="help">
+        <dt>games</dt><dd>.nes or .zip files. they're kept in this browser only.</dd>
+        <dt>d-pad</dt><dd>slide for diagonals.</dd>
+        <dt>a + b</dt><dd>press between them for both.</dd>
+        <dt>saving</dt><dd>one save state per game, in the menu. in-game saves are kept too, and games resume where you left off.</dd>
+        <dt>no sound?</dt><dd>turn off your phone's silent mode.</dd>
+        <dt>controller</dt><dd>plug in a phone controller and press any button.</dd>
+        <dt>keys</dt><dd>arrows, z = b, x = a, enter = start, shift = select, esc = menu.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div id="confirm" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <p id="confirmMsg" class="modal-msg"></p>
+      <div class="modal-actions">
+        <button id="confirmNo" type="button">cancel</button>
+        <button id="confirmYes" class="on" type="button">ok</button>
+      </div>
+    </div>
+  </div>
+  <div id="error" class="modal-overlay" hidden>
+    <div class="modal" role="alertdialog" aria-modal="true">
+      <p id="errorText" class="modal-msg"></p>
+      <div class="modal-actions"><button id="errorBack" class="on" type="button">back to library</button></div>
+    </div>
+  </div>
+  <div id="drop" class="drop" hidden>drop to add</div>
+</div>
+
+<script src="vendor/jsnes.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const SUPPORTED = new Set([0,1,2,3,4,5,7,11,34,38,66,94,140,180]);
+
+/* ================= storage (IndexedDB, falls back to memory) ================= */
+const STORES = ['meta','data','states','slots','sram'];
+const mem = { meta:new Map(), data:new Map(), states:new Map(), slots:new Map(), sram:new Map() };
+const clone = v => { try{ return structuredClone(v); }catch(e){ return v; } };
+let db = null;
+function openDB(){
+  return new Promise(res => {
+    try{
+      const r = indexedDB.open('pocket6502', 2);
+      r.onupgradeneeded = () => { const d = r.result;
+        STORES.forEach(n => { if(!d.objectStoreNames.contains(n)) n === 'meta' ? d.createObjectStore(n, {keyPath:'id'}) : d.createObjectStore(n); }); };
+      r.onsuccess = () => { db = r.result; res(true); };
+      r.onerror = () => res(false);
+      r.onblocked = () => res(false);
+    }catch(e){ res(false); }
+  });
+}
+function run(stores, mode, fn){
+  return new Promise((res, rej) => {
+    try{
+      const t = db.transaction(stores, mode);
+      const r = fn(t);
+      t.oncomplete = () => res(r ? r.result : undefined);
+      t.onerror = t.onabort = () => rej(t.error || new Error('Storage error'));
+    }catch(e){ rej(e); }
+  });
+}
+const store = {
+  list(){ return db ? run('meta','readonly', t => t.objectStore('meta').getAll()) : Promise.resolve([...mem.meta.values()]); },
+  getMeta(id){ return db ? run('meta','readonly', t => t.objectStore('meta').get(id)) : Promise.resolve(mem.meta.get(id)); },
+  getData(id){ return db ? run('data','readonly', t => t.objectStore('data').get(id)) : Promise.resolve(mem.data.get(id)); },
+  add(meta, data){
+    if(!db){ mem.meta.set(meta.id, meta); mem.data.set(meta.id, data); return Promise.resolve(); }
+    return run(['meta','data'],'readwrite', t => { t.objectStore('meta').put(meta); t.objectStore('data').put(data, meta.id); });
+  },
+  putMeta(meta){ if(!db){ mem.meta.set(meta.id, meta); return Promise.resolve(); } return run('meta','readwrite', t => t.objectStore('meta').put(meta)); },
+  remove(id){
+    if(!db){ STORES.forEach(n => mem[n].delete(id)); return Promise.resolve(); }
+    return run(STORES,'readwrite', t => { STORES.forEach(n => t.objectStore(n).delete(id)); });
+  },
+  // per-game key/value stores: states (auto resume), slots (save state), sram (in-game saves)
+  get(name, id){ return db ? run(name,'readonly', t => t.objectStore(name).get(id)) : Promise.resolve(clone(mem[name].get(id))); },
+  put(name, id, v){ if(!db){ mem[name].set(id, clone(v)); return Promise.resolve(); } return run(name,'readwrite', t => t.objectStore(name).put(v, id)); },
+  del(name, id){ if(!db){ mem[name].delete(id); return Promise.resolve(); } return run(name,'readwrite', t => t.objectStore(name).delete(id)); },
+};
+
+/* ================= helpers ================= */
+function fnv(u8){ let h = 0x811c9dc5; for(let i=0;i<u8.length;i++){ h ^= u8[i]; h = Math.imul(h, 0x01000193); } return (h>>>0).toString(16).padStart(8,'0'); }
+function toBin(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i+0x8000)); return s; }
+function cleanName(file){
+  let n = file.replace(/\.[^.]+$/,'').replace(/[_]+/g,' ').replace(/\s*[\(\[][^\)\]]*[\)\]]/g,'').replace(/\s+/g,' ').trim();
+  return n || file;
+}
+function isNes(u8){ return u8.length > 16 && u8[0]===0x4E && u8[1]===0x45 && u8[2]===0x53 && u8[3]===0x1A; }
+function isZip(u8){ return u8.length > 4 && u8[0]===0x50 && u8[1]===0x4B && u8[2]===0x03 && u8[3]===0x04; }
+function mapperOf(u8){ return (u8[6] >> 4) | (u8[7] & 0xF0); }
+function ago(ts){
+  if(!ts) return null;
+  const s = (Date.now()-ts)/1000;
+  if(s < 60) return 'just now';
+  if(s < 3600) return Math.floor(s/60)+' min ago';
+  if(s < 86400) return Math.floor(s/3600)+' hr ago';
+  const d = Math.floor(s/86400); return d===1 ? 'yesterday' : d+' days ago';
+}
+function kb(n){ return n >= 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function hueOf(id){ return parseInt(id.slice(0,6),16) % 360; }
+function vibrate(){ try{ navigator.vibrate && navigator.vibrate(8); }catch(e){} }
+const prefs = {
+  get(k, d){ try{ const v = localStorage.getItem('p6502.'+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('p6502.'+k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ================= library UI ================= */
+const listEl = $('#romList'), noteEl = $('#storeNote');
+let editing = false, romCount = 0;
+function setEditing(v){
+  editing = v && romCount > 0;
+  listEl.classList.toggle('editing', editing);
+  $('#addBtn').hidden = editing; $('#moreBtn').hidden = editing; $('#doneBtn').hidden = !editing;
+}
+const X_ICON = '<svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg>';
+async function renderLibrary(){
+  let roms = [];
+  try{ roms = await store.list(); }catch(e){ roms = []; }
+  roms.sort((a,b) => (b.played||0)-(a.played||0) || b.added-a.added);
+  romCount = roms.length;
+  $('#addBig').hidden = roms.length > 0;
+  if(!roms.length) setEditing(false);
+  listEl.innerHTML = roms.map(r => `<li class="rom" data-id="${r.id}">
+      <button class="rom-play" data-act="play" type="button"><span class="rom-name">${esc(r.name)}</span></button>
+      <button class="rom-del icon" data-act="del" type="button" aria-label="Remove ${esc(r.name)}">${X_ICON}</button></li>`).join('');
+}
+
+// in-app confirm (same pattern as nesprite's confirmModal)
+let confirmResolve = null;
+function askConfirm(msg, yes){
+  $('#confirmMsg').textContent = msg; $('#confirmYes').textContent = yes;
+  $('#confirm').hidden = false; $('#confirmYes').focus();
+  return new Promise(res => { confirmResolve = res; });
+}
+function closeConfirm(v){ if(!confirmResolve) return; $('#confirm').hidden = true; const r = confirmResolve; confirmResolve = null; r(v); }
+$('#confirmYes').addEventListener('click', () => closeConfirm(true));
+$('#confirmNo').addEventListener('click', () => closeConfirm(false));
+$('#confirm').addEventListener('click', e => { if(e.target.id === 'confirm') closeConfirm(false); });
+addEventListener('keydown', e => {
+  if($('#confirm').hidden) return;
+  if(e.key === 'Escape'){ e.preventDefault(); closeConfirm(false); }
+  else if(e.key === 'Enter'){ e.preventDefault(); closeConfirm(true); }
+}, true);
+
+listEl.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-act]'); if(!btn) return;
+  const li = btn.closest('.rom'), id = li.dataset.id;
+  if(btn.dataset.act === 'play'){ startGame(id); return; }
+  const name = li.querySelector('.rom-name').textContent;
+  if(await askConfirm(`remove ${name} and its saves?`, 'remove')){
+    try{ await store.remove(id); }catch(e){}
+    renderLibrary();
+  }
+});
+
+/* ================= importing ================= */
+const fileIn = $('#fileIn');
+$('#addBtn').addEventListener('click', () => fileIn.click());
+$('#addBig').addEventListener('click', () => fileIn.click());
+$('#doneBtn').addEventListener('click', () => setEditing(false));
+// library options
+const showModal = id => { $(id).hidden = false; const c = $(id).querySelector('.modal-head .icon'); c && c.focus(); };
+$('#moreBtn').addEventListener('click', () => { $('#editBtn').disabled = romCount === 0; showModal('#more'); });
+$('#moreClose').addEventListener('click', () => $('#more').hidden = true);
+$('#more').addEventListener('click', e => { if(e.target.id === 'more') $('#more').hidden = true; });
+$('#editBtn').addEventListener('click', () => { $('#more').hidden = true; setEditing(true); });
+fileIn.addEventListener('change', () => { importFiles([...fileIn.files]); fileIn.value = ''; });
+
+async function addOne(fileName, u8, report){
+  if(!isNes(u8)){ report.bad.push(fileName); return; }
+  const id = fnv(u8);
+  let existing = null; try{ existing = await store.getMeta(id); }catch(e){}
+  if(existing){ report.dupe.push(existing.name); return; }
+  const meta = { id, name: cleanName(fileName), file: fileName, size: u8.length, mapper: mapperOf(u8), added: Date.now(), played: 0 };
+  try{ await store.add(meta, u8); report.added.push(meta.name); }
+  catch(e){ report.failed.push(fileName); }
+}
+async function importFiles(files){
+  if(!files.length) return;
+  const report = { added:[], dupe:[], bad:[], failed:[] };
+  for(const f of files){
+    let u8; try{ u8 = new Uint8Array(await f.arrayBuffer()); }catch(e){ report.failed.push(f.name); continue; }
+    if(isZip(u8)){
+      if(!window.JSZip){ report.failed.push(f.name); continue; }
+      try{
+        const z = await JSZip.loadAsync(u8); let found = 0;
+        for(const entry of Object.values(z.files)){
+          if(entry.dir || !/\.nes$/i.test(entry.name) || /(^|\/)__MACOSX\//.test(entry.name)) continue;
+          found++; await addOne(entry.name.split('/').pop(), await entry.async('uint8array'), report);
+        }
+        if(!found) report.bad.push(f.name);
+      }catch(e){ report.bad.push(f.name); }
+    } else await addOne(f.name, u8, report);
+  }
+  const msgs = [];
+  if(report.added.length) msgs.push(report.added.length === 1 ? `added ${report.added[0]}.` : `added ${report.added.length} games.`);
+  if(report.dupe.length) msgs.push(`already added: ${report.dupe.join(', ')}.`);
+  if(report.bad.length) msgs.push(`not an nes game: ${report.bad.join(', ')}.`);
+  if(report.failed.length) msgs.push(`couldn’t add ${report.failed.join(', ')}. storage may be full.`);
+  noteEl.textContent = msgs.join(' ');
+  noteEl.hidden = false;
+  clearTimeout(importFiles.t); importFiles.t = setTimeout(() => { noteEl.hidden = !storageWarning; noteEl.textContent = storageWarning; }, 6000);
+  renderLibrary();
+}
+// drag and drop (desktop)
+const drop = $('#drop'); let dragDepth = 0;
+addEventListener('dragenter', e => { if(!$('#library').hidden && e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); dragDepth++; drop.hidden = false; } });
+addEventListener('dragover', e => { if(!drop.hidden) e.preventDefault(); });
+addEventListener('dragleave', () => { if(--dragDepth <= 0){ dragDepth = 0; drop.hidden = true; } });
+addEventListener('drop', e => { if(drop.hidden) return; e.preventDefault(); dragDepth = 0; drop.hidden = true; importFiles([...e.dataTransfer.files]); });
+
+/* ================= emulator ================= */
+const canvas = $('#screen'), g = canvas.getContext('2d');
+const img = g.createImageData(256, 240), px = new Uint32Array(img.data.buffer);
+for(let i=0;i<px.length;i++) px[i] = 0xFF000000;
+g.putImageData(img,0,0);
+function onFrame(fb){ for(let i=0;i<61440;i++) px[i] = 0xFF000000 | fb[i]; }
+
+// audio ring buffer
+const AB = 16384, AM = AB-1, aL = new Float32Array(AB), aR = new Float32Array(AB);
+let aw = 0, ar = 0, actx = null, soundOn = prefs.get('sound', true);
+function onAudio(l, r){ if(((aw - ar) & AM) >= AB-2) return; aL[aw] = l; aR[aw] = r; aw = (aw+1) & AM; }
+function ensureAudio(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(actx){ try{ actx.resume(); }catch(e){} return; }
+  if(!AC) return;
+  try{
+    actx = new AC();
+    const sp = actx.createScriptProcessor(2048, 0, 2);
+    sp.onaudioprocess = e => {
+      const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
+      let avail = (aw - ar) & AM; const vol = (soundOn && running) ? 1 : 0;
+      for(let i=0;i<L.length;i++){
+        if(avail > 0){ L[i] = aL[ar]*vol; R[i] = aR[ar]*vol; ar = (ar+1) & AM; avail--; }
+        else { L[i] = 0; R[i] = 0; }
+      }
+    };
+    sp.connect(actx.destination);
+    actx.resume && actx.resume();
+  }catch(e){ actx = null; }
+}
+function trimAudio(){ const q = (aw - ar) & AM; if(q > 6144) ar = (aw - 2048) & AM; }
+
+let nes = null, cur = null, curData = null, running = false, paused = false, acc = 0, last = 0, rafId = 0, saveTimer = 0;
+
+// in-game (battery) saves: the cartridge's $6000-$7FFF RAM, written to storage shortly after the game changes it
+let hasBattery = false, sramDirty = false, sramTimer = 0;
+function onBatteryWrite(){ if(hasBattery) sramDirty = true; }
+function readSram(){ const m = nes.cpu.mem, out = new Uint8Array(0x2000); for(let i=0;i<0x2000;i++) out[i] = m[0x6000+i] & 255; return out; }
+function applySram(sr){ if(!sr || !nes) return; const m = nes.cpu.mem; for(let i=0;i<0x2000 && i<sr.length;i++) m[0x6000+i] = sr[i]; }
+function flushSram(){
+  if(!sramDirty || !nes || !cur) return Promise.resolve();
+  sramDirty = false;
+  return store.put('sram', cur.id, readSram()).catch(()=>{});
+}
+async function loadSram(){ if(!hasBattery || !cur) return; try{ applySram(await store.get('sram', cur.id)); }catch(e){} }
+
+// one save state per game
+let slotAt = 0;
+function drawSlot(){
+  $('#loadSlotBtn').disabled = !slotAt;
+}
+async function saveSlot(){
+  if(!nes || !cur || !$('#error').hidden) return;
+  try{
+    const s = nes.toJSON(); delete s.romData;
+    const at = Date.now();
+    await store.put('slots', cur.id, { at, s });
+    slotAt = at; drawSlot(); closeMenu(); flash('saved');
+  }catch(e){ flash('couldn’t save. storage may be full.'); }
+}
+async function loadSlot(){
+  if(!nes || !cur) return;
+  let v = null; try{ v = await store.get('slots', cur.id); }catch(e){}
+  if(!v){ slotAt = 0; drawSlot(); flash('nothing saved yet'); return; }
+  try{ v.s.romData = curData; nes.fromJSON(v.s); aw = ar = 0; acc = 0; closeMenu(); flash('loaded'); }
+  catch(e){ flash('couldn’t load'); }
+}
+$('#saveSlotBtn').addEventListener('click', saveSlot);
+$('#loadSlotBtn').addEventListener('click', loadSlot);
+const STEP = 1000 / 60.0988;
+function loop(t){
+  rafId = requestAnimationFrame(loop);
+  if(!$('#player').hidden) pollPad();
+  if(!running || paused || !nes){ last = t; return; }
+  let dt = t - last; last = t;
+  if(dt > 250) dt = STEP;
+  acc += dt; let n = 0;
+  while(acc >= STEP && n < 4){
+    try{ nes.frame(); }catch(e){ crash(e); return; }
+    acc -= STEP; n++;
+  }
+  if(acc > STEP*4) acc = 0;
+  if(n) g.putImageData(img, 0, 0);
+  trimAudio();
+}
+
+function setLed(){}
+function flash(msg){
+  const f = $('#flash'); f.textContent = msg; f.hidden = false; f.style.opacity = '1';
+  clearTimeout(flash.t); flash.t = setTimeout(() => { f.style.opacity = '0'; setTimeout(() => f.hidden = true, 300); }, 1800);
+}
+function errText(e){
+  const m = String(e && e.message || e);
+  if(/mapper/i.test(m) && cur) return `${cur.name} uses a cartridge type (mapper ${cur.mapper}) that isn’t supported.`;
+  return `${cur ? cur.name : 'the game'} crashed.`;
+}
+function crash(e){ paused = true; setLed(); $('#errorText').textContent = errText(e); $('#error').hidden = false; }
+
+let wakeLock = null;
+async function wake(){ try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
+function unwake(){ try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null; }
+
+async function startGame(id){
+  ensureAudio(); // must run inside the tap
+  if(!window.jsnes){ noteEl.textContent = 'couldn’t load the emulator. check your connection and reload.'; noteEl.hidden = false; return; }
+  let meta, data;
+  try{ meta = await store.getMeta(id); data = await store.getData(id); }catch(e){}
+  if(!meta || !data){ noteEl.textContent = 'couldn’t open that game. remove it and add it again.'; noteEl.hidden = false; return; }
+  cur = meta; curData = toBin(data instanceof Uint8Array ? data : new Uint8Array(data));
+  hasBattery = (data[6] & 2) !== 0; sramDirty = false;
+  nes = new jsnes.NES({ onFrame, onAudioSample: onAudio, onBatteryRamWrite: onBatteryWrite, sampleRate: actx ? actx.sampleRate : 44100, emulateSound: true });
+  $('#error').hidden = true; $('#confirm').hidden = true;
+  $('#menuTitle').textContent = meta.name; $('#menu').hidden = true;
+  showPlayer();
+  for(let i=0;i<px.length;i++) px[i] = 0xFF000000; g.putImageData(img,0,0);
+  try{ nes.loadROM(curData); }
+  catch(e){ running = true; crash(e); return; }
+  await loadSram();
+  slotAt = 0;
+  try{ const v = await store.get('slots', id); slotAt = v ? v.at : 0; }catch(e){}
+  drawSlot();
+  let resumed = false;
+  try{
+    const st = await store.get('states', id);
+    if(st){ st.romData = curData; nes.fromJSON(st); resumed = true; }
+  }catch(e){ try{ nes.loadROM(curData); await loadSram(); }catch(_){} }
+  aw = ar = 0; acc = 0; running = true; paused = false; setLed();
+  meta.played = Date.now(); store.putMeta(meta).catch(()=>{});
+  wake();
+  clearInterval(saveTimer); saveTimer = setInterval(() => { if(running && !paused){ saveState(); drawSlot(); } }, 30000);
+  clearInterval(sramTimer); sramTimer = setInterval(flushSram, 2000);
+}
+function saveState(){
+  if(!nes || !cur || !$('#error').hidden) return Promise.resolve();
+  try{
+    const s = nes.toJSON(); delete s.romData;
+    return Promise.all([store.put('states', cur.id, s).catch(()=>{}), flushSram()]);
+  }catch(e){ return Promise.resolve(); }
+}
+function showPlayer(){ $('#library').hidden = true; $('#player').hidden = false; requestAnimationFrame(measure); }
+async function exitGame(){
+  await saveState();
+  running = false; paused = false; setLed(); clearInterval(saveTimer); clearInterval(sramTimer); releaseAll(); unwake();
+  nes = null; cur = null; curData = null;
+  $('#player').hidden = true; $('#library').hidden = false;
+  renderLibrary();
+}
+$('#backBtn').addEventListener('click', () => { $('#menu').hidden = true; exitGame(); });
+
+// in-game menu: pauses the game while open
+function openMenu(){
+  if(!nes || !$('#error').hidden || !$('#confirm').hidden) return;
+  paused = true; releaseAll(); drawSlot(); drawSoundBtn();
+  $('#menu').hidden = false; $('#saveSlotBtn').focus();
+}
+function closeMenu(){ if($('#menu').hidden) return; $('#menu').hidden = true; if($('#error').hidden && $('#confirm').hidden) paused = false; }
+$('#menuBtn').addEventListener('click', openMenu);
+$('#menuClose').addEventListener('click', closeMenu);
+$('#menu').addEventListener('click', e => { if(e.target.id === 'menu') closeMenu(); });
+
+// help
+$('#helpBtn').addEventListener('click', () => { $('#more').hidden = true; showModal('#help'); });
+$('#helpClose').addEventListener('click', () => { $('#help').hidden = true; });
+$('#help').addEventListener('click', e => { if(e.target.id === 'help') $('#help').hidden = true; });
+addEventListener('keydown', e => {
+  if(e.key !== 'Escape' || !$('#confirm').hidden) return;
+  for(const id of ['#help','#more']) if(!$(id).hidden){ $(id).hidden = true; return; }
+  if(editing){ setEditing(false); return; }
+  if(!$('#player').hidden && nes){ e.preventDefault(); $('#menu').hidden ? openMenu() : closeMenu(); }
+});
+$('#errorBack').addEventListener('click', exitGame);
+$('#restartBtn').addEventListener('click', async () => {
+  if(!nes || !cur) return;
+  $('#menu').hidden = true; paused = true; releaseAll();
+  const ok = await askConfirm('restart from the title screen?', 'restart');
+  if(!nes || !cur) return;
+  if(ok){
+    await flushSram();
+    try{ await store.del('states', cur.id); }catch(e){}
+    try{ nes.loadROM(curData); await loadSram(); aw = ar = 0; }catch(e){ crash(e); return; }
+  }
+  if($('#error').hidden) paused = false;
+});
+
+function drawSoundBtn(){
+  const b = $('#soundBtn');
+  b.setAttribute('aria-label', soundOn ? 'Sound on' : 'Sound off'); b.title = b.getAttribute('aria-label');
+  b.innerHTML = '<svg viewBox="0 0 20 20"><path class="fill" d="M2 7.5h3.5l4.5-4v13l-4.5-4H2z"/>' +
+    (soundOn ? '<path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5a7 7 0 0 1 0 10"/>' : '<path d="M13 7.5l5 5M18 7.5l-5 5"/>') + '</svg>';
+}
+$('#soundBtn').addEventListener('click', () => { soundOn = !soundOn; prefs.set('sound', soundOn); ensureAudio(); drawSoundBtn(); });
+drawSoundBtn();
+
+/* ================= touch controls ================= */
+const BTN = window.jsnes ? {
+  a: jsnes.Controller.BUTTON_A, b: jsnes.Controller.BUTTON_B, select: jsnes.Controller.BUTTON_SELECT, start: jsnes.Controller.BUTTON_START,
+  up: jsnes.Controller.BUTTON_UP, down: jsnes.Controller.BUTTON_DOWN, left: jsnes.Controller.BUTTON_LEFT, right: jsnes.Controller.BUTTON_RIGHT
+} : {};
+const els = {};
+document.querySelectorAll('#player [data-b]').forEach(el => els[el.dataset.b] = el);
+let R = {};
+function measure(){
+  const r = el => el.getBoundingClientRect();
+  R = { dpad: r($('#dpad')), a: r($('#btnA')), b: r($('#btnB')), select: r($('#btnSelect')), start: r($('#btnStart')) };
+}
+addEventListener('resize', () => { if(!$('#player').hidden) measure(); });
+addEventListener('orientationchange', () => setTimeout(measure, 300));
+
+const inRect = (r,x,y,p) => x >= r.left-p && x <= r.right+p && y >= r.top-p && y <= r.bottom+p;
+const inCircle = (r,x,y,p) => { const cx = r.left+r.width/2, cy = r.top+r.height/2, rad = r.width/2+p; return (x-cx)**2 + (y-cy)**2 <= rad*rad; };
+function zoneAt(x,y){
+  if(inRect(R.dpad,x,y,28)) return 'dpad';
+  if(inCircle(R.a,x,y,22) || inCircle(R.b,x,y,22)) return 'face';
+  if(inRect(R.select,x,y,12) || inRect(R.start,x,y,12)) return 'meta';
+  return null;
+}
+function buttonsAt(zone,x,y){
+  const s = new Set();
+  if(zone === 'dpad'){
+    const r = R.dpad, dx = x-(r.left+r.width/2), dy = y-(r.top+r.height/2), dead = r.width*0.11;
+    if(dx*dx + dy*dy < dead*dead) return s;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if(ax > ay*0.45) s.add(dx < 0 ? 'left' : 'right');
+    if(ay > ax*0.45) s.add(dy < 0 ? 'up' : 'down');
+  } else if(zone === 'face'){
+    if(inCircle(R.a,x,y,20)) s.add('a');
+    if(inCircle(R.b,x,y,20)) s.add('b');
+  } else if(zone === 'meta'){
+    if(inRect(R.select,x,y,12)) s.add('select');
+    if(inRect(R.start,x,y,12)) s.add('start');
+  }
+  return s;
+}
+const touches = new Map(), keys = new Set();
+let pressed = new Set();
+function sync(){
+  const want = new Set(keys);
+  padKeys.forEach(b => want.add(b));
+  touches.forEach(t => t.set.forEach(b => want.add(b)));
+  let fresh = false;
+  want.forEach(b => { if(!pressed.has(b)){ fresh = true; els[b] && els[b].classList.add('on'); if(nes && !paused) nes.buttonDown(1, BTN[b]); } });
+  pressed.forEach(b => { if(!want.has(b)){ els[b] && els[b].classList.remove('on'); if(nes) nes.buttonUp(1, BTN[b]); } });
+  pressed = want;
+  if(fresh && touches.size) vibrate();
+}
+function releaseAll(){ touches.clear(); keys.clear(); sync(); }
+
+const player = $('#player');
+player.addEventListener('pointerdown', e => {
+  if(e.target.closest('button') || padMode) return;
+  measure();
+  const zone = zoneAt(e.clientX, e.clientY);
+  if(!zone) return;
+  e.preventDefault();
+  try{ player.setPointerCapture(e.pointerId); }catch(_){}
+  touches.set(e.pointerId, { zone, set: buttonsAt(zone, e.clientX, e.clientY) });
+  sync();
+});
+player.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId); if(!t) return;
+  e.preventDefault();
+  t.set = buttonsAt(t.zone, e.clientX, e.clientY);
+  sync();
+});
+const lift = e => { if(touches.delete(e.pointerId)) sync(); };
+player.addEventListener('pointerup', lift);
+player.addEventListener('pointercancel', lift);
+player.addEventListener('lostpointercapture', lift);
+player.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('touchmove', e => { if(!$('#player').hidden) e.preventDefault(); }, { passive:false });
+
+// keyboard for desktop: arrows, Z = B, X = A, Enter = Start, Shift = Select
+const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyZ:'b', KeyX:'a', Enter:'start', ShiftLeft:'select', ShiftRight:'select' };
+addEventListener('keydown', e => { const b = KEYMAP[e.code]; if(!b || $('#player').hidden || !$('#confirm').hidden || !$('#menu').hidden) return; e.preventDefault(); keys.add(b); sync(); });
+addEventListener('keyup', e => { const b = KEYMAP[e.code]; if(!b) return; keys.delete(b); sync(); });
+
+/* ================= physical controllers (gameplay only) ================= */
+// Uses the standard Gamepad API, so any MFi / USB / Bluetooth controller works, e.g. 8BitDo FlipPad.
+// NES A/B go by button position, like on an NES pad: right (or top) = A, bottom (or left) = B.
+const padKeys = new Set();
+let padMode = false;
+function firstPad(){
+  try{ for(const g of (navigator.getGamepads ? navigator.getGamepads() : [])) if(g && g.connected) return g; }catch(e){}
+  return null;
+}
+function setPadMode(on){
+  if(padMode === on) return;
+  padMode = on; touches.clear();
+  $('#player').classList.toggle('pad-mode', on);
+  if(!$('#player').hidden) requestAnimationFrame(measure);
+}
+addEventListener('gamepadconnected', () => setPadMode(true));
+addEventListener('gamepaddisconnected', () => { if(!firstPad()){ setPadMode(false); padKeys.clear(); sync(); } });
+function pollPad(){
+  const gp = firstPad();
+  if(!gp){ if(padKeys.size){ padKeys.clear(); sync(); } return; }
+  if(!padMode) setPadMode(true);
+  const btn = i => { const b = gp.buttons[i]; return !!b && (b.pressed || b.value > 0.5); };
+  const ax = gp.axes || [];
+  const now = {
+    a: btn(1) || btn(3), b: btn(0) || btn(2), select: btn(8), start: btn(9),
+    up: btn(12) || ax[1] < -0.5, down: btn(13) || ax[1] > 0.5,
+    left: btn(14) || ax[0] < -0.5, right: btn(15) || ax[0] > 0.5
+  };
+  const active = !$('#player').hidden && nes && !paused;
+  let changed = false;
+  for(const k in now){
+    const on = active && now[k];
+    if(on !== padKeys.has(k)){ on ? padKeys.add(k) : padKeys.delete(k); changed = true; }
+  }
+  if(changed) sync();
+}
+
+/* ================= lifecycle ================= */
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ releaseAll(); if(running){ saveState(); running = false; setLed(); } }
+  else if(nes && !$('#player').hidden){ running = true; acc = 0; aw = ar = 0; ensureAudio(); setLed(); wake(); }
+});
+addEventListener('pagehide', () => { saveState(); });
+addEventListener('blur', releaseAll);
+
+/* ================= boot ================= */
+let storageWarning = '';
+(async () => {
+  const ok = await openDB();
+  if(!ok){ storageWarning = 'this browser blocks storage, so games are gone when you close the page.'; }
+  else { try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){} }
+  if(!window.jsnes) storageWarning = 'couldn’t load the emulator. check your connection and reload.';
+  if(storageWarning){ noteEl.textContent = storageWarning; noteEl.hidden = false; }
+  renderLibrary();
+  rafId = requestAnimationFrame(loop);
+})();
+})();
+</script>
+<script>
+// offline support: cache the app so it opens with no connection
+if('serviceWorker' in navigator){ addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+</script>
+</body>
+</html>
