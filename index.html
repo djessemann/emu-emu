@@ -16,8 +16,9 @@
 <style>
 /* page reset (keeps content clear of the notch and home bar) */
 :root{padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)}
-/* home screen app, phone upright: never let the game sit under the status bar (iOS can report a 0 inset there) */
-@media (display-mode:standalone) and (pointer:coarse) and (orientation:portrait){:root{padding-top:max(env(safe-area-inset-top, 0px), 50px)}}
+/* home screen app, phone upright: iOS draws a fade over the top of the page that reaches ~40px below the status bar,
+   and a page can't turn it off. Keep content clear of it. (iOS can also report a 0 inset here, hence the floor.) */
+@media (display-mode:standalone) and (pointer:coarse) and (orientation:portrait){:root{padding-top:max(calc(env(safe-area-inset-top, 0px) + 40px), 90px)}}
 [hidden]{display:none!important}
 img{max-width:100%}
 

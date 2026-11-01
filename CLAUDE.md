@@ -31,14 +31,14 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`pocket6502-v3` → `v4` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
+- **Bump `CACHE` in `sw.js`** (`pocket6502-v4` → `v5` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
 
 ### Screens
 - **Library:** header with the name, `+` (add games) and `···` (opens "remove games" and "help"). Rows show the game name only, sorted A–Z. "remove games" puts an `×` on each row until "done". Empty state is one dashed "add a game" box.
-- **Player:** game screen on top (kept below the iPhone status bar: status bar style is `black-translucent` so the safe-area inset is reported, plus a 50px fallback in the home screen app when upright), d-pad bottom left, B/A bottom right (diagonal, NES-style), and a bottom row with `☰` (menu, far left), `select`, `start`.
+- **Player:** game screen on top (kept below the iPhone status bar: status bar style is `black-translucent` so the safe-area inset is reported, and in the home screen app when upright the top padding is inset + 40px, floor 90px, because iOS draws a fade that reaches below the status bar and can't be turned off), d-pad bottom left, B/A bottom right (diagonal, NES-style), and a bottom row with `☰` (menu, far left), `select`, `start`.
 - **Menu (☰):** pauses the game. Game name + `×` (resume). `save` / `load` (one slot; load is disabled until a save exists), then three icon buttons: library, restart, sound. Saving or loading closes the menu and shows a one-word flash ("saved", "loaded").
 - **Landscape:** d-pad left, screen center, buttons right.
 
