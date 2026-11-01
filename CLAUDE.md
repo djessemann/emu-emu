@@ -2,16 +2,16 @@
 
 **Pocket 6502** is a dead-simple NES emulator for phones: portrait first, touch controls, a ROM library, one save state per game, and plug-in controller support. It started as a Claude artifact and is moving here to be hosted on GitHub Pages.
 
-- Repo: `djessemann/snappy-emu` (default branch `main`)
-- Live: `https://djessemann.github.io/snappy-emu/`
+- Repo: `djessemann/6502-emu` (default branch `main`)
+- Live: `https://djessemann.github.io/6502-emu/`
 - Owner is non-technical: do the git, build and deploy work yourself rather than handing over instructions. Explain results in plain, short English.
 
 ## First-time setup (do this first)
 
-1. Push every file in this folder to `main` of `djessemann/snappy-emu`, at the repo root. (Done.)
+1. Push every file in this folder to `main` of `djessemann/6502-emu`, at the repo root. (Done.)
 2. Make sure `.nojekyll` is at the root (it is in this folder).
 3. Turn on **GitHub Pages → Deploy from a branch → `main` → `/ (root)`**. If you can't change Pages settings from the session, say so plainly and tell the owner exactly where to click: repo **Settings → Pages → Source: Deploy from a branch → Branch: main / (root) → Save**.
-4. Wait for the Pages build, then confirm `https://djessemann.github.io/snappy-emu/` loads (index.html, not the README).
+4. Wait for the Pages build, then confirm `https://djessemann.github.io/6502-emu/` loads (index.html, not the README).
 5. Tell the owner: open the link in Safari on the iPhone → Share → **Add to Home Screen**. Games added in the old Claude artifact don't carry over (browser storage is per site), so ROMs need to be added again.
 
 ## Repo layout (keep it minimal)

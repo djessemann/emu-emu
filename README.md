@@ -2,7 +2,7 @@
 
 A simple NES player for your phone. Portrait layout, touch controls, a game library, save states, and plug-in controller support (8BitDo FlipPad, any MFi / Bluetooth / USB pad).
 
-Live: `https://djessemann.github.io/snappy-emu/`
+Live: `https://djessemann.github.io/6502-emu/`
 
 ## Use it
 
