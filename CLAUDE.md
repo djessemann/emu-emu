@@ -72,7 +72,7 @@ CLAUDE.md
 - Audio: the core creates its own AudioContext after the tap, which iOS would keep muted. `window.AudioContext` is wrapped so the core gets a context made (and resumed) inside the tap. Pause and the sound toggle suspend/resume that context.
 - Draws with WebGL on a fresh clone of `#screen` per game (a canvas can't switch from 2D to WebGL).
 - FCEUmm runs nearly every mapper, including expansion audio (VRC6, VRC7, Namco 163, Sunsoft 5B, MMC5). `.fds` (Famicom Disk System) would also need the `disksys.rom` BIOS, so imports stay `.nes` only for now.
-- **License:** FCEUmm is GPL-2.0 (`vendor/fceumm/LICENSE.txt`). Shipping it means the app as a whole is GPL. Owner is fine with that, including for a possible free App Store release later (small theoretical risk: Apple's terms vs GPL).
+- **License:** FCEUmm is GPL-2.0 (`vendor/fceumm/LICENSE.txt`). Shipping it means the app as a whole is GPL. Owner is fine with that. The app will stay free (no paid version planned); a free App Store release is possible later (small theoretical risk: Apple's terms vs GPL).
 
 ## UI style (match `nesprite` and `nes-tracker`)
 
@@ -91,17 +91,12 @@ CLAUDE.md
 ## Roadmap the owner has discussed
 
 0. **More systems (later, not started):** same approach as NES, one EmulatorJS prebuilt core per system from npm (`@emulatorjs/core-<name>`, unpack the `<name>-wasm.data` 7z), same UI, a per-system button set. Picks:
-   - **SNES:** `snes9x`. Good accuracy and fast enough on phones. (bsnes is more exact but too slow for phones in WebAssembly, and has no prebuilt.) License is non-commercial only: fine for a free app, not a paid one.
+   - **SNES:** `snes9x`. Good accuracy and fast enough on phones. (bsnes is more exact but too slow for phones in WebAssembly, and has no prebuilt.) Non-commercial license; fine, the app will stay free.
    - **Sega Master System / Genesis (also Game Gear, Sega CD):** `genesis_plus_gx`. The most accurate Sega 8/16-bit core, one core for all of them. Non-commercial license, same as above. (`picodrive` adds 32X if ever wanted.)
    - **Game Boy / Game Boy Color:** `gambatte` (GPL-2.0), the most accurate GB/GBC core. Or use `mgba` for these too, to have one core for all three Nintendo handhelds.
    - **Game Boy Advance:** `mgba` (MPL-2.0, a permissive license). Best GBA core by a distance.
    - Each core is about 4–5 MB. Load a system's core only when a game for it is opened, and keep "one game per page load".
    - SNES, GBA and Genesis need more buttons (X/Y, L/R, C), so the on-screen pad needs a layout per system.
-   - **If the app ever becomes paid:** snes9x and genesis_plus_gx (and picodrive) forbid commercial use; GPL does not (selling GPL apps is allowed, the App Store/GPL risk is the same free or paid). Paid-friendly alternatives, licenses checked on GitHub Nov 2026:
-     - SNES: bsnes (GPL-3, most accurate, likely too slow on phones in wasm), Mesen2 (GPL-3, no web build), ares (ISC, permissive, heavy, no web build), LakeSnes (MIT, light, but no enhancement chips like SuperFX/SA-1, last updated 2023).
-     - Genesis/SMS: BlastEm (GPL-3, Genesis), Gearsystem (GPL-3, SMS/GG), clownmdemu (AGPL-3, Genesis), ares (ISC).
-     - **jgenesis** (GPL-3, Rust, actively maintained): Genesis, SMS, GG, Sega CD, 32X and SNES in one, already has a web build. First thing to try if going paid; check iPhone speed before switching.
-     - None of these has an EmulatorJS prebuilt, so they'd need a web build of our own. Switching engines keeps in-game saves (usually) but not save states.
 
 1. **TV mode (web):** a ☰ menu option that hides everything but the game, for Apple TV screen mirroring. Limit: mirroring copies the phone's orientation, so with the phone upright (FlipPad) the game is small on the TV; it only fills the TV with the phone sideways.
 2. **Native iPhone app via TestFlight (the real fix for the TV):** wrap this web app in a native shell and use iOS's external-display support to send a full-size game picture to the TV while the phone stays upright in the FlipPad. Needs Xcode on the owner's MacBook Pro M4 and the $99/yr Apple Developer account. TestFlight builds last 90 days; internal testing needs no review.
