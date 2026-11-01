@@ -16,7 +16,7 @@ Live: `https://djessemann.github.io/6502-emu/`
 | File | What it is |
 |---|---|
 | `index.html` | The whole app (HTML, CSS, JS inline) |
-| `vendor/jsnes.min.js` | NES emulator core, jsnes 1.2.1 (Apache-2.0) |
+| `vendor/fceumm/` | NES emulator core, FCEUmm (GPL-2.0), web build from EmulatorJS |
 | `vendor/jszip.min.js` | Reads .zip files, JSZip 3.10.1 (MIT) |
 | `manifest.json` | Makes it installable as a home screen app |
 | `sw.js` | Service worker, caches the app for offline use |

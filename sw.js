@@ -1,11 +1,12 @@
 // Pocket 6502 service worker: precaches the app so it opens offline.
 // Bump CACHE whenever any cached file changes, or installed users keep the old version.
-const CACHE = 'pocket6502-v5';
+const CACHE = 'pocket6502-v6';
 const ASSETS = [
   './',
   'index.html',
   'manifest.json',
-  'vendor/jsnes.min.js',
+  'vendor/fceumm/fceumm_libretro.js',
+  'vendor/fceumm/fceumm_libretro.wasm',
   'vendor/jszip.min.js',
   'favicon.png',
   'apple-touch-icon.png',

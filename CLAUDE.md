@@ -18,7 +18,8 @@
 
 ```
 index.html          # the whole app: HTML + CSS + JS inline
-vendor/jsnes.min.js # emulator core, jsnes 1.2.1 (Apache-2.0), local copy for offline use
+vendor/fceumm/      # emulator core: FCEUmm (GPL-2.0) as EmulatorJS builds it (RetroArch + core in WebAssembly),
+                    # fceumm_libretro.js/.wasm unpacked from npm @emulatorjs/core-fceumm 4.2.3 (fceumm-wasm.data, a 7z)
 vendor/jszip.min.js # zip reader, JSZip 3.10.1 (MIT), local copy for offline use
 manifest.json       # PWA manifest (installable, standalone)
 sw.js               # service worker, precaches the app shell for offline
@@ -31,7 +32,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`pocket6502-v5` → `v6` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
+- **Bump `CACHE` in `sw.js`** (`pocket6502-v6` → `v7` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
@@ -52,19 +53,26 @@ CLAUDE.md
 |---|---|---|
 | `meta` | `id` (keyPath) | `{id, name, file, size, mapper, added, played}` |
 | `data` | game id | ROM bytes (`Uint8Array`) |
-| `states` | game id | auto "resume" snapshot (jsnes `toJSON()` minus `romData`), written on leave, app switch, and every 30s |
-| `slots` | game id | the one manual save state `{at, s}` |
-| `sram` | game id | in-game battery save, `$6000–$7FFF` (8 KB), flushed every 2s when the game wrote to it, only for ROMs with the battery flag |
+| `states` | game id | auto "resume" snapshot (FCEUmm state bytes, `Uint8Array`), written on leave, app switch, and every 30s |
+| `slots` | game id | the one manual save state `{at, s}`, `s` = FCEUmm state bytes |
+| `sram` | game id | in-game battery save: the core's `.srm` file (8 KB `$6000–$7FFF` for normal carts, same bytes the old jsnes build stored), copied every 2s when it changed |
 
 - Game id = FNV-1a hash of the ROM bytes (dedupes re-adds).
+- `states`/`slots` written by the old jsnes engine are plain objects, not `Uint8Array`: they're ignored (and old resume snapshots deleted).
 - Restart clears `states` only. In-game saves and the save state survive.
 - Removing a game deletes it from all five stores.
 - If IndexedDB is blocked, everything falls back to memory and a note says games won't be kept.
 
 ### Emulator
-- jsnes 1.2.1. Supported mappers: 0, 1, 2, 3, 4, 5, 7, 11, 34, 38, 66, 94, 140, 180. Unsupported ones show an error when opened.
-- `fixMMC1()` in `index.html` patches jsnes's mapper 1 PRG banking at runtime (stock jsnes breaks 512 KB SUROM carts like Dragon Warrior III/IV, and doesn't re-place the fixed bank on mode change). Keep it if jsnes is ever updated unless the new version fixes this.
-- Runs at 60.0988 fps off `requestAnimationFrame` with an accumulator (fine on 120 Hz screens). Audio: ring buffer into a ScriptProcessor, started inside the first tap (iOS needs a user gesture). Screen wake lock while playing.
+- **FCEUmm** via EmulatorJS's prebuilt web core (`EJS_Runtime` factory in `fceumm_libretro.js`). We don't use EmulatorJS's UI, only the core, driven through its exported functions with `cwrap`: `simulate_input` (libretro ids: B 0, select 2, start 3, up 4, down 5, left 6, right 7, A 8), `save_state_info` + `HEAPU8` (get state), `load_state` (from a file in the core's FS), `toggleMainLoop` (pause), `system_restart`, `cmd_savefiles` + `save_file_path` (the `.srm`), `get_current_frame_count`.
+- The core's own keyboard input is off (its `parent` is a detached div, so its key listeners never fire) and its joypad driver is `null`; our touch/keyboard/gamepad code feeds every button.
+- Config: `RA_CFG` is written to `/home/web_user/.config/retroarch/retroarch.cfg`; core options (`CORE_OPTS`: square pixels `fceumm_aspect = "PP"`, no vertical overscan crop, so 256×240 like before) are written through the `callbacks.setupCoreSettingFile` hook.
+- The wasm is fetched and compiled in the background when the app opens and handed to the core with `instantiateWasm`, so tapping a game is quick.
+- **One game per page load.** Leaving a game saves and then reloads the page: each core instance holds a 128 MB heap and the old one isn't fully freed, so reloading is how memory stays flat on iPhone.
+- Audio: the core creates its own AudioContext after the tap, which iOS would keep muted. `window.AudioContext` is wrapped so the core gets a context made (and resumed) inside the tap. Pause and the sound toggle suspend/resume that context.
+- Draws with WebGL on a fresh clone of `#screen` per game (a canvas can't switch from 2D to WebGL).
+- FCEUmm runs nearly every mapper, including expansion audio (VRC6, VRC7, Namco 163, Sunsoft 5B, MMC5). `.fds` (Famicom Disk System) would also need the `disksys.rom` BIOS, so imports stay `.nes` only for now.
+- **License:** FCEUmm is GPL-2.0 (`vendor/fceumm/LICENSE.txt`). Shipping it means the app as a whole is GPL. Owner is fine with that, including for a possible free App Store release later (small theoretical risk: Apple's terms vs GPL).
 
 ## UI style (match `nesprite` and `nes-tracker`)
 
@@ -81,6 +89,14 @@ CLAUDE.md
 - Commit when a change is complete, with a clear message. Bump the `sw.js` cache name in the same commit as any app change.
 
 ## Roadmap the owner has discussed
+
+0. **More systems (later, not started):** same approach as NES, one EmulatorJS prebuilt core per system from npm (`@emulatorjs/core-<name>`, unpack the `<name>-wasm.data` 7z), same UI, a per-system button set. Picks:
+   - **SNES:** `snes9x`. Good accuracy and fast enough on phones. (bsnes is more exact but too slow for phones in WebAssembly, and has no prebuilt.) License is non-commercial only: fine for a free app, not a paid one.
+   - **Sega Master System / Genesis (also Game Gear, Sega CD):** `genesis_plus_gx`. The most accurate Sega 8/16-bit core, one core for all of them. Non-commercial license, same as above. (`picodrive` adds 32X if ever wanted.)
+   - **Game Boy / Game Boy Color:** `gambatte` (GPL-2.0), the most accurate GB/GBC core. Or use `mgba` for these too, to have one core for all three Nintendo handhelds.
+   - **Game Boy Advance:** `mgba` (MPL-2.0, a permissive license). Best GBA core by a distance.
+   - Each core is about 4–5 MB. Load a system's core only when a game for it is opened, and keep "one game per page load".
+   - SNES, GBA and Genesis need more buttons (X/Y, L/R, C), so the on-screen pad needs a layout per system.
 
 1. **TV mode (web):** a ☰ menu option that hides everything but the game, for Apple TV screen mirroring. Limit: mirroring copies the phone's orientation, so with the phone upright (FlipPad) the game is small on the TV; it only fills the TV with the phone sideways.
 2. **Native iPhone app via TestFlight (the real fix for the TV):** wrap this web app in a native shell and use iOS's external-display support to send a full-size game picture to the TV while the phone stays upright in the FlipPad. Needs Xcode on the owner's MacBook Pro M4 and the $99/yr Apple Developer account. TestFlight builds last 90 days; internal testing needs no review.

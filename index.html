@@ -267,13 +267,12 @@ svg .fill{fill:currentColor;stroke:none}
   <div id="drop" class="drop" hidden>drop to add</div>
 </div>
 
-<script src="vendor/jsnes.min.js"></script>
+<script src="vendor/fceumm/fceumm_libretro.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
-const SUPPORTED = new Set([0,1,2,3,4,5,7,11,34,38,66,94,140,180]);
 
 /* ================= storage (IndexedDB, falls back to memory) ================= */
 const STORES = ['meta','data','states','slots','sram'];
@@ -453,184 +452,218 @@ addEventListener('dragover', e => { if(!drop.hidden) e.preventDefault(); });
 addEventListener('dragleave', () => { if(--dragDepth <= 0){ dragDepth = 0; drop.hidden = true; } });
 addEventListener('drop', e => { if(drop.hidden) return; e.preventDefault(); dragDepth = 0; drop.hidden = true; importFiles([...e.dataTransfer.files]); });
 
-/* ================= emulator ================= */
-const canvas = $('#screen'), g = canvas.getContext('2d');
-const img = g.createImageData(256, 240), px = new Uint32Array(img.data.buffer);
-for(let i=0;i<px.length;i++) px[i] = 0xFF000000;
-g.putImageData(img,0,0);
-function onFrame(fb){ for(let i=0;i<61440;i++) px[i] = 0xFF000000 | fb[i]; }
+/* ================= emulator: FCEUmm ================= */
+// FCEUmm (a libretro NES core) built for the web by EmulatorJS: RetroArch + the core compiled to WebAssembly,
+// stored in vendor/fceumm so it works offline. We use it only as an engine. Screen, controls, menus and storage
+// are ours; its own keyboard and gamepad handling are switched off (keyboard listens on a detached element,
+// joypad driver "null"), and buttons are fed in with simulate_input.
+// One game per page load: leaving a game saves, then reloads the page so the core's memory is fully freed.
+const CORE_WASM = 'vendor/fceumm/fceumm_libretro.wasm';
+const RA_CFG = [
+  'savefile_directory = "/data/saves"', 'sort_savefiles_enable = "false"', 'sort_savefiles_by_content_enable = "false"',
+  'savestate_auto_save = "false"', 'savestate_auto_load = "false"', 'autosave_interval = "0"', 'block_sram_overwrite = "false"',
+  'video_smooth = "false"', 'video_vsync = "true"', 'video_font_enable = "false"', 'fps_show = "false"', 'audio_latency = "64"',
+  'input_joypad_driver = "null"', 'input_autodetect_enable = "false"', 'pause_nonactive = "false"'
+].join('\n') + '\n';
+// square pixels and the full 256x240 picture, same as before
+const CORE_OPTS = 'fceumm_aspect = "PP"\nfceumm_overscan_v_top = "0"\nfceumm_overscan_v_bottom = "0"\n';
+// libretro joypad ids
+const BTN = { b:0, select:2, start:3, up:4, down:5, left:6, right:7, a:8 };
 
-// audio ring buffer
-const AB = 16384, AM = AB-1, aL = new Float32Array(AB), aR = new Float32Array(AB);
-let aw = 0, ar = 0, actx = null, soundOn = prefs.get('sound', true);
-function onAudio(l, r){ if(((aw - ar) & AM) >= AB-2) return; aL[aw] = l; aR[aw] = r; aw = (aw+1) & AM; }
-function ensureAudio(){
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if(actx){ try{ actx.resume(); }catch(e){} return; }
-  if(!AC) return;
-  try{
-    actx = new AC();
-    const sp = actx.createScriptProcessor(2048, 0, 2);
-    sp.onaudioprocess = e => {
-      const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
-      let avail = (aw - ar) & AM; const vol = (soundOn && running) ? 1 : 0;
-      for(let i=0;i<L.length;i++){
-        if(avail > 0){ L[i] = aL[ar]*vol; R[i] = aR[ar]*vol; ar = (ar+1) & AM; avail--; }
-        else { L[i] = 0; R[i] = 0; }
-      }
-    };
-    sp.connect(actx.destination);
-    actx.resume && actx.resume();
-  }catch(e){ actx = null; }
+function fsWrite(FS, path, data){
+  let dir = '';
+  path.split('/').slice(1, -1).forEach(p => { dir += '/' + p; try{ FS.mkdir(dir); }catch(e){} });
+  FS.writeFile(path, data);
 }
-function trimAudio(){ const q = (aw - ar) & AM; if(q > 6144) ar = (aw - 2048) & AM; }
+let wasmP = null;
+function compileCore(){
+  if(!wasmP) wasmP = fetch(CORE_WASM).then(r => { if(!r.ok) throw new Error('core'); return r.arrayBuffer(); }).then(b => WebAssembly.compile(b));
+  wasmP.catch(() => { wasmP = null; });
+  return wasmP;
+}
 
-let nes = null, cur = null, curData = null, running = false, paused = false, acc = 0, last = 0, rafId = 0, saveTimer = 0;
+// audio: the core makes its own AudioContext once it starts, which is after the tap, so iOS would keep it muted.
+// Make one inside the tap instead and hand it over when the core asks for one.
+const RealAC = window.AudioContext || window.webkitAudioContext;
+let soundOn = prefs.get('sound', true), spareAC = null, coreAC = null;
+if(RealAC){
+  const AC = function(opts){
+    let c;
+    if(spareAC && !(opts && opts.sampleRate && opts.sampleRate !== spareAC.sampleRate)){ c = spareAC; spareAC = null; }
+    else c = opts ? new RealAC(opts) : new RealAC();
+    coreAC = c; setTimeout(applyRun, 0);
+    return c;
+  };
+  AC.prototype = RealAC.prototype;
+  window.AudioContext = AC; if(window.webkitAudioContext) window.webkitAudioContext = AC;
+}
+function unlockAudio(){
+  try{
+    const c = coreAC || spareAC || (RealAC && (spareAC = new RealAC()));
+    if(!c) return;
+    c.resume && c.resume();
+    const s = c.createBufferSource(); s.buffer = c.createBuffer(1, 1, 22050); s.connect(c.destination); s.start(0);
+  }catch(e){}
+}
 
-// in-game (battery) saves: the cartridge's $6000-$7FFF RAM, written to storage shortly after the game changes it
-let hasBattery = false, sramDirty = false, sramTimer = 0;
-function onBatteryWrite(){ if(hasBattery) sramDirty = true; }
-function readSram(){ const m = nes.cpu.mem, out = new Uint8Array(0x2000); for(let i=0;i<0x2000;i++) out[i] = m[0x6000+i] & 255; return out; }
-function applySram(sr){ if(!sr || !nes) return; const m = nes.cpu.mem; for(let i=0;i<0x2000 && i<sr.length;i++) m[0x6000+i] = sr[i]; }
+let M = null, F = null, cur = null, running = false, paused = false, saveTimer = 0, sramTimer = 0, lastSram = null;
+// run the core only while playing; sound follows the same switch (and the sound setting)
+function applyRun(){
+  const go = !!F && running && paused === false && $('#error').hidden;
+  if(F){ try{ F.loop(go ? 1 : 0); }catch(e){} }
+  if(coreAC){ try{ (go && soundOn) ? coreAC.resume() : coreAC.suspend(); }catch(e){} }
+}
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+
+function getState(){
+  const s = F.stateInfo().split('|');
+  if(s[2] !== '1') throw new Error('state');
+  return M.HEAPU8.slice(+s[1], +s[1] + +s[0]);
+}
+function putState(u8){
+  try{ M.FS.unlink('/game.state'); }catch(e){}
+  M.FS.writeFile('/game.state', u8);
+  F.loadState('game.state', 0);
+}
+
+// in-game (battery) saves: the core's .srm file, copied to storage when it changes
+function sameBytes(a, b){ if(!a || !b || a.length !== b.length) return false; for(let i=0;i<a.length;i++) if(a[i] !== b[i]) return false; return true; }
 function flushSram(){
-  if(!sramDirty || !nes || !cur) return Promise.resolve();
-  sramDirty = false;
-  return store.put('sram', cur.id, readSram()).catch(()=>{});
-}
-async function loadSram(){ if(!hasBattery || !cur) return; try{ applySram(await store.get('sram', cur.id)); }catch(e){} }
-
-// one save state per game
-let slotAt = 0;
-function drawSlot(){
-  $('#loadSlotBtn').disabled = !slotAt;
-}
-async function saveSlot(){
-  if(!nes || !cur || !$('#error').hidden) return;
+  if(!F || !cur) return Promise.resolve();
   try{
-    const s = nes.toJSON(); delete s.romData;
-    const at = Date.now();
+    F.saveFiles();
+    const p = F.savePath();
+    if(!p || !M.FS.analyzePath(p).exists) return Promise.resolve();
+    const d = M.FS.readFile(p);
+    if(sameBytes(d, lastSram)) return Promise.resolve();
+    lastSram = d;
+    return store.put('sram', cur.id, d).catch(()=>{});
+  }catch(e){ return Promise.resolve(); }
+}
+
+// one save state per game (states from the old jsnes engine are a different format and are ignored)
+let slotAt = 0;
+function drawSlot(){ $('#loadSlotBtn').disabled = !slotAt; }
+async function saveSlot(){
+  if(!F || !cur || !$('#error').hidden) return;
+  try{
+    const s = getState(), at = Date.now();
     await store.put('slots', cur.id, { at, s });
     slotAt = at; drawSlot(); closeMenu(); flash('saved');
   }catch(e){ flash('couldn’t save. storage may be full.'); }
 }
 async function loadSlot(){
-  if(!nes || !cur) return;
+  if(!F || !cur) return;
   let v = null; try{ v = await store.get('slots', cur.id); }catch(e){}
-  if(!v){ slotAt = 0; drawSlot(); flash('nothing saved yet'); return; }
-  try{ v.s.romData = curData; nes.fromJSON(v.s); aw = ar = 0; acc = 0; closeMenu(); flash('loaded'); }
+  if(!v || !(v.s instanceof Uint8Array)){ slotAt = 0; drawSlot(); flash('nothing saved yet'); return; }
+  try{ putState(v.s); closeMenu(); flash('loaded'); }
   catch(e){ flash('couldn’t load'); }
 }
 $('#saveSlotBtn').addEventListener('click', saveSlot);
 $('#loadSlotBtn').addEventListener('click', loadSlot);
-const STEP = 1000 / 60.0988;
-function loop(t){
-  rafId = requestAnimationFrame(loop);
-  if(!$('#player').hidden) pollPad();
-  if(!running || paused || !nes){ last = t; return; }
-  let dt = t - last; last = t;
-  if(dt > 250) dt = STEP;
-  acc += dt; let n = 0;
-  while(acc >= STEP && n < 4){
-    try{ nes.frame(); }catch(e){ crash(e); return; }
-    acc -= STEP; n++;
-  }
-  if(acc > STEP*4) acc = 0;
-  if(n) g.putImageData(img, 0, 0);
-  trimAudio();
-}
+
+// only job left for our own frame loop: read plugged-in controllers
+function loop(){ requestAnimationFrame(loop); if(!$('#player').hidden) pollPad(); }
 
 function setLed(){}
 function flash(msg){
   const f = $('#flash'); f.textContent = msg; f.hidden = false; f.style.opacity = '1';
   clearTimeout(flash.t); flash.t = setTimeout(() => { f.style.opacity = '0'; setTimeout(() => f.hidden = true, 300); }, 1800);
 }
-function errText(e){
-  const m = String(e && e.message || e);
-  if(/mapper/i.test(m) && cur) return `${cur.name} uses a cartridge type (mapper ${cur.mapper}) that isn’t supported.`;
-  return `${cur ? cur.name : 'the game'} crashed.`;
+function crash(why){
+  $('#errorText').textContent = why === 'core' ? 'couldn’t load the emulator. check your connection and reload.'
+    : `couldn’t run ${cur ? cur.name : 'the game'}. the file may be damaged.`;
+  $('#error').hidden = false; applyRun();
 }
-function crash(e){ paused = true; setLed(); $('#errorText').textContent = errText(e); $('#error').hidden = false; }
 
 let wakeLock = null;
 async function wake(){ try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 function unwake(){ try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null; }
 
-// jsnes's MMC1 (mapper 1) gets PRG banking wrong for 512 KB carts (SUROM: Dragon Warrior III/IV, Dragon Quest III/IV)
-// and doesn't re-place the fixed bank when the mode changes. This replaces just the PRG side with real MMC1 behavior.
-// Until the game first writes the PRG register (prgReg undefined, e.g. a resume snapshot from before this fix),
-// it leaves banks alone, exactly like stock jsnes, so old snapshots keep working.
-function fixMMC1(n){
-  const m = n.mmap; if(!m || n.rom.mapperType !== 1) return;
-  const P = Object.getPrototypeOf(m); if(P.p6502fixed) return; P.p6502fixed = true;
-  const setReg = P.setReg, write = P.write, toJSON = P.toJSON, fromJSON = P.fromJSON;
-  P.syncPrg = function(){
-    if(this.prgReg === undefined) return;
-    const count = this.nes.rom.romCount, outer = (count > 16 && this.romSelectionReg0) ? 16 : 0, r = this.prgReg & 15;
-    const load = (bank, addr) => this.loadRomBank((outer + bank) % count, addr);
-    if(!this.prgSwitchingSize){ load(r & 14, 0x8000); load((r & 14) + 1, 0xC000); }
-    else if(this.prgSwitchingArea){ load(r, 0x8000); load(15, 0xC000); }
-    else { load(0, 0x8000); load(r, 0xC000); }
-  };
-  P.setReg = function(reg, v){ if(reg === 3) this.prgReg = v & 15; else setReg.call(this, reg, v); this.syncPrg(); };
-  P.write = function(addr, v){ write.call(this, addr, v); if(addr >= 0x8000 && (v & 0x80)) this.syncPrg(); };
-  P.toJSON = function(){ const t = toJSON.call(this); t.prgReg = this.prgReg; return t; };
-  P.fromJSON = function(t){ fromJSON.call(this, t); this.prgReg = t.prgReg; };
-}
-
+let starting = false;
 async function startGame(id){
-  ensureAudio(); // must run inside the tap
-  if(!window.jsnes){ noteEl.textContent = 'couldn’t load the emulator. check your connection and reload.'; noteEl.hidden = false; return; }
+  unlockAudio(); // must run inside the tap
+  if(starting || F) return;
+  if(typeof window.EJS_Runtime !== 'function'){ noteEl.textContent = 'couldn’t load the emulator. check your connection and reload.'; noteEl.hidden = false; return; }
+  starting = true;
   let meta, data;
   try{ meta = await store.getMeta(id); data = await store.getData(id); }catch(e){}
-  if(!meta || !data){ noteEl.textContent = 'couldn’t open that game. remove it and add it again.'; noteEl.hidden = false; return; }
-  cur = meta; curData = toBin(data instanceof Uint8Array ? data : new Uint8Array(data));
-  hasBattery = (data[6] & 2) !== 0; sramDirty = false;
-  nes = new jsnes.NES({ onFrame, onAudioSample: onAudio, onBatteryRamWrite: onBatteryWrite, sampleRate: actx ? actx.sampleRate : 44100, emulateSound: true });
+  if(!meta || !data){ starting = false; noteEl.textContent = 'couldn’t open that game. remove it and add it again.'; noteEl.hidden = false; return; }
+  cur = meta;
   $('#error').hidden = true; $('#confirm').hidden = true;
   $('#menuTitle').textContent = meta.name; $('#menu').hidden = true;
   showPlayer();
-  for(let i=0;i<px.length;i++) px[i] = 0xFF000000; g.putImageData(img,0,0);
-  try{ nes.loadROM(curData); fixMMC1(nes); }
-  catch(e){ running = true; crash(e); return; }
-  await loadSram();
+  // the core draws with WebGL, so it gets a fresh canvas
+  const oldCv = $('#screen'), cv = oldCv.cloneNode(false); oldCv.replaceWith(cv);
+  let sram = null, state = null;
+  try{ sram = await store.get('sram', id); }catch(e){}
+  try{ state = await store.get('states', id); }catch(e){}
   slotAt = 0;
-  try{ const v = await store.get('slots', id); slotAt = v ? v.at : 0; }catch(e){}
+  try{ const v = await store.get('slots', id); slotAt = (v && v.s instanceof Uint8Array) ? v.at : 0; }catch(e){}
   drawSlot();
-  let resumed = false;
   try{
-    const st = await store.get('states', id);
-    if(st){ st.romData = curData; nes.fromJSON(st); resumed = true; }
-  }catch(e){ try{ nes.loadROM(curData); await loadSram(); }catch(_){} }
-  aw = ar = 0; acc = 0; running = true; paused = false; setLed();
+    const wasm = await compileCore();
+    const mod = {};
+    M = await window.EJS_Runtime(Object.assign(mod, {
+      noInitialRun: true, arguments: [], preRun: [], postRun: [],
+      canvas: cv, parent: document.createElement('div'),
+      callbacks: { setupCoreSettingFile: p => fsWrite(mod.FS, p, CORE_OPTS) },
+      print(){}, printErr(){},
+      locateFile: f => f,
+      instantiateWasm(imports, done){ WebAssembly.instantiate(wasm, imports).then(i => done(i, wasm)); return {}; },
+      getSavExt: () => '.srm'
+    }));
+  }catch(e){ starting = false; crash('core'); return; }
+  F = {
+    input: M.cwrap('simulate_input', 'null', ['number','number','number']),
+    stateInfo: M.cwrap('save_state_info', 'string', []),
+    loadState: M.cwrap('load_state', 'number', ['string','number']),
+    loop: M.cwrap('toggleMainLoop', 'null', ['number']),
+    restart: M.cwrap('system_restart', '', []),
+    saveFiles: M.cwrap('cmd_savefiles', '', []),
+    savePath: M.cwrap('save_file_path', 'string', []),
+    frame: M.cwrap('get_current_frame_count', 'number', [])
+  };
+  fsWrite(M.FS, '/home/web_user/.config/retroarch/retroarch.cfg', RA_CFG);
+  fsWrite(M.FS, '/game.nes', data instanceof Uint8Array ? data : new Uint8Array(data));
+  if(sram instanceof Uint8Array){ fsWrite(M.FS, '/data/saves/game.srm', sram); lastSram = sram; }
+  else fsWrite(M.FS, '/data/saves/.keep', '');
+  try{ M.callMain(['/game.nes']); M.resumeMainLoop && M.resumeMainLoop(); }
+  catch(e){ starting = false; crash(); return; }
+  running = true; paused = false; starting = false;
+  pressed.forEach(b => F.input(0, BTN[b], 1));
+  // pick up where you left off
+  if(state instanceof Uint8Array){ await nextFrame(); await nextFrame(); try{ putState(state); }catch(e){} }
+  else if(state){ store.del('states', id).catch(()=>{}); }
+  applyRun();
+  // a game the core can't run never produces a frame
+  setTimeout(() => { if(F && running && !paused && document.visibilityState === 'visible' && F.frame() === 0) crash(); }, 3000);
   meta.played = Date.now(); store.putMeta(meta).catch(()=>{});
   wake();
-  clearInterval(saveTimer); saveTimer = setInterval(() => { if(running && !paused){ saveState(); drawSlot(); } }, 30000);
+  clearInterval(saveTimer); saveTimer = setInterval(() => { if(running && !paused) saveState(); }, 30000);
   clearInterval(sramTimer); sramTimer = setInterval(flushSram, 2000);
 }
 function saveState(){
-  if(!nes || !cur || !$('#error').hidden) return Promise.resolve();
-  try{
-    const s = nes.toJSON(); delete s.romData;
-    return Promise.all([store.put('states', cur.id, s).catch(()=>{}), flushSram()]);
-  }catch(e){ return Promise.resolve(); }
+  if(!F || !cur || !$('#error').hidden) return Promise.resolve();
+  let s = null; try{ s = getState(); }catch(e){}
+  return Promise.all([s ? store.put('states', cur.id, s).catch(()=>{}) : null, flushSram()]);
 }
 function showPlayer(){ $('#library').hidden = true; $('#player').hidden = false; requestAnimationFrame(measure); }
 async function exitGame(){
-  await saveState();
-  running = false; paused = false; setLed(); clearInterval(saveTimer); clearInterval(sramTimer); releaseAll(); unwake();
-  nes = null; cur = null; curData = null;
-  $('#player').hidden = true; $('#library').hidden = false;
-  renderLibrary();
+  if(F){ await saveState(); running = false; applyRun(); }
+  clearInterval(saveTimer); clearInterval(sramTimer); releaseAll(); unwake();
+  if(F || M){ location.reload(); return; } // frees the core's memory
+  cur = null; $('#player').hidden = true; $('#library').hidden = false; renderLibrary();
 }
 $('#backBtn').addEventListener('click', () => { $('#menu').hidden = true; exitGame(); });
 
 // in-game menu: pauses the game while open
 function openMenu(){
-  if(!nes || !$('#error').hidden || !$('#confirm').hidden) return;
-  paused = true; releaseAll(); drawSlot(); drawSoundBtn();
+  if(!F || !$('#error').hidden || !$('#confirm').hidden) return;
+  paused = true; applyRun(); releaseAll(); drawSlot(); drawSoundBtn();
   $('#menu').hidden = false; $('#saveSlotBtn').focus();
 }
-function closeMenu(){ if($('#menu').hidden) return; $('#menu').hidden = true; if($('#error').hidden && $('#confirm').hidden) paused = false; }
+function closeMenu(){ if($('#menu').hidden) return; $('#menu').hidden = true; if($('#error').hidden && $('#confirm').hidden){ paused = false; applyRun(); } }
 $('#menuBtn').addEventListener('click', openMenu);
 $('#menuClose').addEventListener('click', closeMenu);
 $('#menu').addEventListener('click', e => { if(e.target.id === 'menu') closeMenu(); });
@@ -643,20 +676,20 @@ addEventListener('keydown', e => {
   if(e.key !== 'Escape' || !$('#confirm').hidden) return;
   for(const id of ['#help','#more']) if(!$(id).hidden){ $(id).hidden = true; return; }
   if(editing){ setEditing(false); return; }
-  if(!$('#player').hidden && nes){ e.preventDefault(); $('#menu').hidden ? openMenu() : closeMenu(); }
+  if(!$('#player').hidden && F){ e.preventDefault(); $('#menu').hidden ? openMenu() : closeMenu(); }
 });
 $('#errorBack').addEventListener('click', exitGame);
 $('#restartBtn').addEventListener('click', async () => {
-  if(!nes || !cur) return;
-  $('#menu').hidden = true; paused = true; releaseAll();
+  if(!F || !cur) return;
+  $('#menu').hidden = true; paused = true; applyRun(); releaseAll();
   const ok = await askConfirm('restart from the title screen?', 'restart');
-  if(!nes || !cur) return;
+  if(!F || !cur) return;
   if(ok){
     await flushSram();
     try{ await store.del('states', cur.id); }catch(e){}
-    try{ nes.loadROM(curData); await loadSram(); aw = ar = 0; }catch(e){ crash(e); return; }
+    try{ F.restart(); }catch(e){ crash(); return; }
   }
-  if($('#error').hidden) paused = false;
+  if($('#error').hidden){ paused = false; applyRun(); }
 });
 
 function drawSoundBtn(){
@@ -665,14 +698,10 @@ function drawSoundBtn(){
   b.innerHTML = '<svg viewBox="0 0 20 20"><path class="fill" d="M2 7.5h3.5l4.5-4v13l-4.5-4H2z"/>' +
     (soundOn ? '<path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5a7 7 0 0 1 0 10"/>' : '<path d="M13 7.5l5 5M18 7.5l-5 5"/>') + '</svg>';
 }
-$('#soundBtn').addEventListener('click', () => { soundOn = !soundOn; prefs.set('sound', soundOn); ensureAudio(); drawSoundBtn(); });
+$('#soundBtn').addEventListener('click', () => { soundOn = !soundOn; prefs.set('sound', soundOn); unlockAudio(); applyRun(); drawSoundBtn(); });
 drawSoundBtn();
 
 /* ================= touch controls ================= */
-const BTN = window.jsnes ? {
-  a: jsnes.Controller.BUTTON_A, b: jsnes.Controller.BUTTON_B, select: jsnes.Controller.BUTTON_SELECT, start: jsnes.Controller.BUTTON_START,
-  up: jsnes.Controller.BUTTON_UP, down: jsnes.Controller.BUTTON_DOWN, left: jsnes.Controller.BUTTON_LEFT, right: jsnes.Controller.BUTTON_RIGHT
-} : {};
 const els = {};
 document.querySelectorAll('#player [data-b]').forEach(el => els[el.dataset.b] = el);
 let R = {};
@@ -715,8 +744,8 @@ function sync(){
   padKeys.forEach(b => want.add(b));
   touches.forEach(t => t.set.forEach(b => want.add(b)));
   let fresh = false;
-  want.forEach(b => { if(!pressed.has(b)){ fresh = true; els[b] && els[b].classList.add('on'); if(nes && !paused) nes.buttonDown(1, BTN[b]); } });
-  pressed.forEach(b => { if(!want.has(b)){ els[b] && els[b].classList.remove('on'); if(nes) nes.buttonUp(1, BTN[b]); } });
+  want.forEach(b => { if(!pressed.has(b)){ fresh = true; els[b] && els[b].classList.add('on'); if(F && !paused) F.input(0, BTN[b], 1); } });
+  pressed.forEach(b => { if(!want.has(b)){ els[b] && els[b].classList.remove('on'); if(F) F.input(0, BTN[b], 0); } });
   pressed = want;
   if(fresh && touches.size) vibrate();
 }
@@ -780,7 +809,7 @@ function pollPad(){
     up: btn(12) || ax[1] < -0.5, down: btn(13) || ax[1] > 0.5,
     left: btn(14) || ax[0] < -0.5, right: btn(15) || ax[0] > 0.5
   };
-  const active = !$('#player').hidden && nes && !paused;
+  const active = !$('#player').hidden && F && !paused;
   let changed = false;
   for(const k in now){
     const on = active && now[k];
@@ -791,8 +820,8 @@ function pollPad(){
 
 /* ================= lifecycle ================= */
 document.addEventListener('visibilitychange', () => {
-  if(document.hidden){ releaseAll(); if(running){ saveState(); running = false; setLed(); } }
-  else if(nes && !$('#player').hidden){ running = true; acc = 0; aw = ar = 0; ensureAudio(); setLed(); wake(); }
+  if(document.hidden){ releaseAll(); if(running){ saveState(); running = false; applyRun(); unwake(); } }
+  else if(F && !$('#player').hidden){ running = true; applyRun(); wake(); }
 });
 addEventListener('pagehide', () => { saveState(); });
 addEventListener('blur', releaseAll);
@@ -803,10 +832,11 @@ let storageWarning = '';
   const ok = await openDB();
   if(!ok){ storageWarning = 'this browser blocks storage, so games are gone when you close the page.'; }
   else { try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){} }
-  if(!window.jsnes) storageWarning = 'couldn’t load the emulator. check your connection and reload.';
+  if(typeof window.EJS_Runtime !== 'function') storageWarning = 'couldn’t load the emulator. check your connection and reload.';
   if(storageWarning){ noteEl.textContent = storageWarning; noteEl.hidden = false; }
   renderLibrary();
-  rafId = requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
+  setTimeout(() => compileCore().catch(()=>{}), 300); // get the emulator ready before a game is tapped
 })();
 })();
 </script>
