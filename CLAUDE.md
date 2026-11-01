@@ -31,7 +31,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`pocket6502-v4` → `v5` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
+- **Bump `CACHE` in `sw.js`** (`pocket6502-v5` → `v6` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
@@ -63,6 +63,7 @@ CLAUDE.md
 
 ### Emulator
 - jsnes 1.2.1. Supported mappers: 0, 1, 2, 3, 4, 5, 7, 11, 34, 38, 66, 94, 140, 180. Unsupported ones show an error when opened.
+- `fixMMC1()` in `index.html` patches jsnes's mapper 1 PRG banking at runtime (stock jsnes breaks 512 KB SUROM carts like Dragon Warrior III/IV, and doesn't re-place the fixed bank on mode change). Keep it if jsnes is ever updated unless the new version fixes this.
 - Runs at 60.0988 fps off `requestAnimationFrame` with an accumulator (fine on 120 Hz screens). Audio: ring buffer into a ScriptProcessor, started inside the first tap (iOS needs a user gesture). Screen wake lock while playing.
 
 ## UI style (match `nesprite` and `nes-tracker`)

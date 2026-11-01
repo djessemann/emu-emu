@@ -555,6 +555,28 @@ let wakeLock = null;
 async function wake(){ try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 function unwake(){ try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null; }
 
+// jsnes's MMC1 (mapper 1) gets PRG banking wrong for 512 KB carts (SUROM: Dragon Warrior III/IV, Dragon Quest III/IV)
+// and doesn't re-place the fixed bank when the mode changes. This replaces just the PRG side with real MMC1 behavior.
+// Until the game first writes the PRG register (prgReg undefined, e.g. a resume snapshot from before this fix),
+// it leaves banks alone, exactly like stock jsnes, so old snapshots keep working.
+function fixMMC1(n){
+  const m = n.mmap; if(!m || n.rom.mapperType !== 1) return;
+  const P = Object.getPrototypeOf(m); if(P.p6502fixed) return; P.p6502fixed = true;
+  const setReg = P.setReg, write = P.write, toJSON = P.toJSON, fromJSON = P.fromJSON;
+  P.syncPrg = function(){
+    if(this.prgReg === undefined) return;
+    const count = this.nes.rom.romCount, outer = (count > 16 && this.romSelectionReg0) ? 16 : 0, r = this.prgReg & 15;
+    const load = (bank, addr) => this.loadRomBank((outer + bank) % count, addr);
+    if(!this.prgSwitchingSize){ load(r & 14, 0x8000); load((r & 14) + 1, 0xC000); }
+    else if(this.prgSwitchingArea){ load(r, 0x8000); load(15, 0xC000); }
+    else { load(0, 0x8000); load(r, 0xC000); }
+  };
+  P.setReg = function(reg, v){ if(reg === 3) this.prgReg = v & 15; else setReg.call(this, reg, v); this.syncPrg(); };
+  P.write = function(addr, v){ write.call(this, addr, v); if(addr >= 0x8000 && (v & 0x80)) this.syncPrg(); };
+  P.toJSON = function(){ const t = toJSON.call(this); t.prgReg = this.prgReg; return t; };
+  P.fromJSON = function(t){ fromJSON.call(this, t); this.prgReg = t.prgReg; };
+}
+
 async function startGame(id){
   ensureAudio(); // must run inside the tap
   if(!window.jsnes){ noteEl.textContent = 'couldn’t load the emulator. check your connection and reload.'; noteEl.hidden = false; return; }
@@ -568,7 +590,7 @@ async function startGame(id){
   $('#menuTitle').textContent = meta.name; $('#menu').hidden = true;
   showPlayer();
   for(let i=0;i<px.length;i++) px[i] = 0xFF000000; g.putImageData(img,0,0);
-  try{ nes.loadROM(curData); }
+  try{ nes.loadROM(curData); fixMMC1(nes); }
   catch(e){ running = true; crash(e); return; }
   await loadSram();
   slotAt = 0;
