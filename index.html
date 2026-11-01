@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pocket 6502">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="favicon.png">
@@ -16,6 +16,8 @@
 <style>
 /* page reset (keeps content clear of the notch and home bar) */
 :root{padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)}
+/* home screen app, phone upright: never let the game sit under the status bar (iOS can report a 0 inset there) */
+@media (display-mode:standalone) and (pointer:coarse) and (orientation:portrait){:root{padding-top:max(env(safe-area-inset-top, 0px), 50px)}}
 [hidden]{display:none!important}
 img{max-width:100%}
 
@@ -74,7 +76,7 @@ svg .fill{fill:currentColor;stroke:none}
 #screen{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .flash{position:absolute;left:8px;top:8px;background:var(--bg);border:1px solid var(--line);padding:4px 8px;font-size:12px;pointer-events:none}
 
-/* controls: square, outlined, inverted while held */
+/* controls: outlined, inverted while held. a/b are round (owner's call), everything else square */
 .dpad-cell{grid-area:dpad;display:flex;align-items:center;justify-content:center}
 .face-cell{grid-area:face;display:flex;align-items:center;justify-content:center}
 .meta-cell{grid-area:meta;display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center;gap:12px;padding-top:6px}
@@ -97,7 +99,7 @@ svg .fill{fill:currentColor;stroke:none}
 .arm.left.on::after{border-right-color:#000}
 .arm.right.on::after{border-left-color:#000}
 .face{--k:min(19vw, 13dvh, 80px);position:relative;width:calc(var(--k)*2.25);height:calc(var(--k)*1.75)}
-.fbtn{position:absolute;width:var(--k);height:var(--k);border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;
+.fbtn{position:absolute;width:var(--k);height:var(--k);border:1px solid var(--line);border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;
   font-size:calc(var(--k)*.28);font-weight:700}
 .fbtn.b{left:0;bottom:4%}
 .fbtn.a{right:0;top:4%}
