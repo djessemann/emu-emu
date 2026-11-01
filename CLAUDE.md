@@ -31,13 +31,13 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`pocket6502-v1` → `v2` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
+- **Bump `CACHE` in `sw.js`** (`pocket6502-v2` → `v3` …) whenever any cached file changes, or installed users keep the stale version. If you add a new file the app needs, add it to `ASSETS` too.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
 
 ### Screens
-- **Library:** header with the name, `+` (add games) and `···` (opens "remove games" and "help"). Rows show the game name only, sorted by last played. "remove games" puts an `×` on each row until "done". Empty state is one dashed "add a game" box.
+- **Library:** header with the name, `+` (add games) and `···` (opens "remove games" and "help"). Rows show the game name only, sorted A–Z. "remove games" puts an `×` on each row until "done". Empty state is one dashed "add a game" box.
 - **Player:** game screen on top, d-pad bottom left, B/A bottom right (diagonal, NES-style), and a bottom row with `☰` (menu, far left), `select`, `start`.
 - **Menu (☰):** pauses the game. Game name + `×` (resume). `save` / `load` (one slot; load is disabled until a save exists), then three icon buttons: library, restart, sound. Saving or loading closes the menu and shows a one-word flash ("saved", "loaded").
 - **Landscape:** d-pad left, screen center, buttons right.
@@ -45,7 +45,7 @@ CLAUDE.md
 ### Input
 - **Touch:** one pointer handler on `#player` hit-tests zones by rectangle (`measure()` caches rects). D-pad is 8-way by angle from center with a small dead zone, and a thumb that starts on it stays locked to it while sliding. Pressing between A and B hits both. Light haptic tick where supported.
 - **Keyboard:** arrows, Z = B, X = A, Enter = Start, Shift = Select, Esc = menu.
-- **Controllers (gameplay only, by owner's choice — no menu/library navigation):** standard Gamepad API, polled every frame while the player is open. Any connected pad flips the player into `pad-mode`: on-screen d-pad/A/B/select/start hide, the screen gets bigger, ☰ stays. A/B map **by position** like an NES pad: right (or top) = A, bottom (or left) = B. D-pad 12–15 plus left stick, select 8, start 9. Built for the **8BitDo FlipPad** (USB-C, Apple-supported). Browsers only report a pad after its first button press.
+- **Controllers (gameplay only, by owner's choice — no menu/library navigation):** standard Gamepad API, polled every frame while the player is open. Any connected pad flips the player into `pad-mode`: on-screen d-pad/A/B/select/start hide, the screen gets bigger, ☰ stays. A/B: buttons 0/2 = A, 1/3 = B. This was swapped once; the owner confirmed on the FlipPad that the old by-position mapping put A and B backwards. D-pad 12–15 plus left stick, select 8, start 9. Built for the **8BitDo FlipPad** (USB-C, Apple-supported). Browsers only report a pad after its first button press.
 
 ### Saving (all in IndexedDB `pocket6502`, version 2)
 | Store | Key | Holds |

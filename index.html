@@ -357,7 +357,7 @@ const X_ICON = '<svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg>'
 async function renderLibrary(){
   let roms = [];
   try{ roms = await store.list(); }catch(e){ roms = []; }
-  roms.sort((a,b) => (b.played||0)-(a.played||0) || b.added-a.added);
+  roms.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:'base'}));
   romCount = roms.length;
   $('#addBig').hidden = roms.length > 0;
   if(!roms.length) setEditing(false);
@@ -729,7 +729,7 @@ addEventListener('keyup', e => { const b = KEYMAP[e.code]; if(!b) return; keys.d
 
 /* ================= physical controllers (gameplay only) ================= */
 // Uses the standard Gamepad API, so any MFi / USB / Bluetooth controller works, e.g. 8BitDo FlipPad.
-// NES A/B go by button position, like on an NES pad: right (or top) = A, bottom (or left) = B.
+// A/B mapping tested on the 8BitDo FlipPad: buttons 0/2 = A, 1/3 = B (the owner reported the old mapping was swapped).
 const padKeys = new Set();
 let padMode = false;
 function firstPad(){
@@ -751,7 +751,7 @@ function pollPad(){
   const btn = i => { const b = gp.buttons[i]; return !!b && (b.pressed || b.value > 0.5); };
   const ax = gp.axes || [];
   const now = {
-    a: btn(1) || btn(3), b: btn(0) || btn(2), select: btn(8), start: btn(9),
+    a: btn(0) || btn(2), b: btn(1) || btn(3), select: btn(8), start: btn(9),
     up: btn(12) || ax[1] < -0.5, down: btn(13) || ax[1] > 0.5,
     left: btn(14) || ax[0] < -0.5, right: btn(15) || ax[0] > 0.5
   };
