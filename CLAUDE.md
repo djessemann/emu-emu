@@ -97,6 +97,11 @@ CLAUDE.md
    - **Game Boy Advance:** `mgba` (MPL-2.0, a permissive license). Best GBA core by a distance.
    - Each core is about 4–5 MB. Load a system's core only when a game for it is opened, and keep "one game per page load".
    - SNES, GBA and Genesis need more buttons (X/Y, L/R, C), so the on-screen pad needs a layout per system.
+   - **If the app ever becomes paid:** snes9x and genesis_plus_gx (and picodrive) forbid commercial use; GPL does not (selling GPL apps is allowed, the App Store/GPL risk is the same free or paid). Paid-friendly alternatives, licenses checked on GitHub Nov 2026:
+     - SNES: bsnes (GPL-3, most accurate, likely too slow on phones in wasm), Mesen2 (GPL-3, no web build), ares (ISC, permissive, heavy, no web build), LakeSnes (MIT, light, but no enhancement chips like SuperFX/SA-1, last updated 2023).
+     - Genesis/SMS: BlastEm (GPL-3, Genesis), Gearsystem (GPL-3, SMS/GG), clownmdemu (AGPL-3, Genesis), ares (ISC).
+     - **jgenesis** (GPL-3, Rust, actively maintained): Genesis, SMS, GG, Sega CD, 32X and SNES in one, already has a web build. First thing to try if going paid; check iPhone speed before switching.
+     - None of these has an EmulatorJS prebuilt, so they'd need a web build of our own. Switching engines keeps in-game saves (usually) but not save states.
 
 1. **TV mode (web):** a ☰ menu option that hides everything but the game, for Apple TV screen mirroring. Limit: mirroring copies the phone's orientation, so with the phone upright (FlipPad) the game is small on the TV; it only fills the TV with the phone sideways.
 2. **Native iPhone app via TestFlight (the real fix for the TV):** wrap this web app in a native shell and use iOS's external-display support to send a full-size game picture to the TV while the phone stays upright in the FlipPad. Needs Xcode on the owner's MacBook Pro M4 and the $99/yr Apple Developer account. TestFlight builds last 90 days; internal testing needs no review.
