@@ -3,13 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Pocket 6502</title>
-<meta name="description" content="A simple NES player for your phone.">
+<title>emu emu</title>
+<meta name="description" content="A simple game player for your phone: NES, SNES, Game Boy, GBA and Sega.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="emu emu">
+<meta property="og:description" content="A simple game player for your phone: NES, SNES, Game Boy, GBA and Sega.">
+<meta property="og:url" content="https://djessemann.github.io/emu-emu/">
+<meta property="og:image" content="https://djessemann.github.io/emu-emu/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="emu emu">
+<meta name="twitter:description" content="A simple game player for your phone: NES, SNES, Game Boy, GBA and Sega.">
+<meta name="twitter:image" content="https://djessemann.github.io/emu-emu/og.png">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Pocket 6502">
+<meta name="apple-mobile-web-app-title" content="emu emu">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -61,28 +72,28 @@ svg .fill{fill:currentColor;stroke:none}
 .rom-list.editing .rom-play{pointer-events:none;color:var(--muted)}
 .note{margin:0 0 12px;font-size:12px;line-height:1.5;border:1px solid var(--line);padding:9px 11px}
 .add-big{width:100%;border:1px dashed var(--line);padding:36px 12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.tabs{display:flex;gap:6px;margin:0 0 14px}
+.tabs button{flex:1;min-width:0;height:44px;padding:0;font-size:13px}
 .add-big svg{width:28px;height:28px}
 .add-big small{color:var(--muted);font-size:12px}
 .drop{position:absolute;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);margin:12px;z-index:20}
 
 /* ---------- player ---------- */
-#player{display:grid;touch-action:none;
-  grid-template-columns:1fr 1fr;
-  grid-template-rows:auto minmax(0,1fr) auto;
-  grid-template-areas:"screen screen" "dpad face" "meta meta";
-  padding-block:12px 14px;column-gap:8px;max-width:640px;margin:0 auto}
-.screen-cell{grid-area:screen;display:flex;justify-content:center;min-width:0}
-.stage{position:relative;width:100%;border:1px solid var(--line);background:#000}
-.glass{position:relative;width:100%;aspect-ratio:256/240;max-height:52dvh;margin:0 auto;background:#000}
-#screen{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+/* Control sizes come from Delta's official iPhone layouts (NES/SNES/GBA). --u is one point on a 390-point-wide phone,
+   so everything scales with the phone. Controls sit in one fixed block at the bottom, same spot for every system;
+   the game screen takes the space above. --ar is the game screen's shape, set per system. */
+#player{--u:calc(min(100vw, 480px) / 390);--ar:256/240;display:flex;flex-direction:column;touch-action:none;max-width:480px;margin:0 auto;padding-top:12px}
+.screen-cell{flex:1 1 auto;min-height:0;display:flex;justify-content:center;align-items:flex-start;container-type:size}
+.stage{border:1px solid var(--line);padding:calc(var(--u)*10);background:#000;
+  width:min(100cqw, calc((100cqh - var(--u)*20 - 2px) * var(--ar) + var(--u)*20 + 2px))}
+.glass{position:relative;width:100%;aspect-ratio:var(--ar);background:#000}
+#screen{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .flash{position:absolute;left:8px;top:8px;background:var(--bg);border:1px solid var(--line);padding:4px 8px;font-size:12px;pointer-events:none}
 
-/* controls: outlined, inverted while held. a/b are round (owner's call), everything else square */
-.dpad-cell{grid-area:dpad;display:flex;align-items:center;justify-content:center}
-.face-cell{grid-area:face;display:flex;align-items:center;justify-content:center}
-.meta-cell{grid-area:meta;display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center;gap:12px;padding-top:6px}
-.menu-btn{justify-self:start}
-.dpad{--s:min(42vw, 30dvh, 186px);position:relative;width:var(--s);height:var(--s)}
+/* controls: outlined, inverted while held. face buttons are round (owner's call), everything else square */
+.pad{position:relative;flex:none;height:calc(var(--u)*310);margin-top:calc(var(--u)*14)}
+.pad > *{position:absolute}
+.dpad{--s:calc(var(--u)*153);left:calc(var(--u)*4);top:calc(var(--u)*74);width:var(--s);height:var(--s)}
 .arm{position:absolute;background:var(--bg);border:1px solid var(--line);width:34%;height:34%;left:33%;top:33%}
 .arm.up{top:0;border-bottom:0}
 .arm.down{top:66%;border-top:0}
@@ -99,14 +110,18 @@ svg .fill{fill:currentColor;stroke:none}
 .arm.down.on::after{border-top-color:#000}
 .arm.left.on::after{border-right-color:#000}
 .arm.right.on::after{border-left-color:#000}
-.face{--k:min(19vw, 13dvh, 80px);position:relative;width:calc(var(--k)*2.25);height:calc(var(--k)*1.75)}
-.fbtn{position:absolute;width:var(--k);height:var(--k);border:1px solid var(--line);border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;
-  font-size:calc(var(--k)*.28);font-weight:700}
-.fbtn.b{left:0;bottom:4%}
-.fbtn.a{right:0;top:4%}
+.face{top:calc(var(--u)*150);transform:translateY(-50%)}
+.fbtn{position:absolute;border:1px solid var(--line);border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:700}
 .fbtn.on{background:var(--ink);color:#000}
-.mbtn{border:1px solid var(--line);width:96px;padding:8px 0;text-align:center;font-size:12px;letter-spacing:.5px}
+.sbtn{top:0;width:calc(var(--u)*120);height:calc(var(--u)*36);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700}
+.sbtn.l{left:0}
+.sbtn.r{right:0}
+.sbtn.on{background:var(--ink);color:#000}
+.meta{left:0;right:0;top:calc(var(--u)*262);height:calc(var(--u)*32);display:flex;justify-content:center;gap:calc(var(--u)*12)}
+.menu-btn{position:absolute;left:0;top:0;height:100%;width:44px;padding:0}
+.mbtn{border:1px solid var(--line);width:calc(var(--u)*72);display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:.5px}
 .mbtn.on{background:var(--ink);color:#000;font-weight:700}
+#player:not(.has-lr) .sbtn,#player.no-select #btnSelect{display:none}
 
 /* in-app modal, same as nesprite's confirmModal */
 .modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:24px;touch-action:none}
@@ -127,21 +142,29 @@ svg .fill{fill:currentColor;stroke:none}
 .help dt{font-weight:700}
 .help dd{margin:0;color:var(--muted)}
 
-/* controller plugged in: hide the on-screen pad, keep the menu button */
-#player.pad-mode{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;grid-template-areas:"screen" "meta" "."}
-#player.pad-mode .dpad-cell,#player.pad-mode .face-cell,#player.pad-mode .mbtn{display:none}
-#player.pad-mode .glass{max-height:62dvh}
+/* controller plugged in: hide the on-screen pad, keep the menu button; the screen grows into the space */
+#player.pad-mode .pad{height:calc(var(--u)*60)}
+#player.pad-mode .dpad,#player.pad-mode .face,#player.pad-mode .sbtn,#player.pad-mode .mbtn{display:none}
+#player.pad-mode .meta{top:0}
+#player.pad-mode .screen-cell{flex:0 1 auto;height:calc((min(100vw, 480px) - 24px - var(--u)*20 - 2px) / (var(--ar)) + var(--u)*20 + 2px)}
 
+/* sideways: d-pad left, screen center, buttons right, l / r above them */
 @media (orientation:landscape) and (max-height:560px){
-  #player{max-width:none;grid-template-columns:1fr auto 1fr;grid-template-rows:minmax(0,1fr) auto;
-    grid-template-areas:"dpad screen face" "dpad meta face";padding-block:8px}
-  .screen-cell{height:100%;min-height:0}
-  .stage{height:100%;width:auto;display:flex}
-  .glass{height:100%;width:auto;max-height:none}
-  .dpad{--s:min(30vw, 58dvh, 180px)}
-  .face{--k:min(13vw, 25dvh, 78px)}
-  #player.pad-mode{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"screen" "meta"}
-  #player.pad-mode .glass{max-height:none}
+  #player{--u:calc(min(100vh, 430px) / 390);max-width:none;display:grid;padding:8px 0;column-gap:12px;
+    grid-template-columns:1fr minmax(0, calc((100dvh - var(--u)*70) * var(--ar))) 1fr;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:"l screen r" "dpad screen face" ". meta ."}
+  .screen-cell{grid-area:screen;height:100%;align-items:center}
+  .pad{display:contents}
+  .pad > *{position:relative;left:auto;right:auto;top:auto}
+  .dpad{grid-area:dpad;align-self:center;justify-self:center}
+  .face{grid-area:face;align-self:center;justify-self:center;transform:none;right:auto!important}
+  .sbtn.l{grid-area:l;justify-self:center}
+  .sbtn.r{grid-area:r;justify-self:center}
+  .meta{grid-area:meta;margin-top:8px}
+  #player.pad-mode{grid-template-areas:"l screen r" "dpad screen face" ". meta ."}
+  #player.pad-mode .meta{top:auto}
+  #player.pad-mode .screen-cell{height:100%}
 }
 </style>
 </head>
@@ -151,19 +174,26 @@ svg .fill{fill:currentColor;stroke:none}
   <section id="library" class="view" aria-label="Library">
     <div class="lib-inner">
       <header class="lib-head">
-        <h1>pocket 6502</h1>
+        <h1>emu emu</h1>
         <div class="acts">
           <button id="addBtn" class="icon" type="button" aria-label="Add games" title="Add games"><svg viewBox="0 0 20 20"><path d="M10 3v14M3 10h14"/></svg></button>
           <button id="moreBtn" class="icon" type="button" aria-label="More" title="More"><svg viewBox="0 0 20 20"><rect x="2.5" y="8.5" width="3" height="3" class="fill"/><rect x="8.5" y="8.5" width="3" height="3" class="fill"/><rect x="14.5" y="8.5" width="3" height="3" class="fill"/></svg></button>
           <button id="doneBtn" class="on" type="button" hidden>done</button>
         </div>
       </header>
+      <nav id="tabs" class="tabs" aria-label="Systems">
+        <button type="button" data-sys="nes">nes</button>
+        <button type="button" data-sys="snes">snes</button>
+        <button type="button" data-sys="gb">gb</button>
+        <button type="button" data-sys="gba">gba</button>
+        <button type="button" data-sys="sega">sega</button>
+      </nav>
       <p id="storeNote" class="note" hidden></p>
       <ul id="romList" class="rom-list"></ul>
       <button id="addBig" class="add-big" type="button" hidden>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
-        <span>add a game</span>
-        <small>.nes or .zip</small>
+        <span id="addBigText">add a game</span>
+        <small id="addBigExt">.nes or .zip</small>
       </button>
     </div>
     <input id="fileIn" type="file" multiple hidden>
@@ -178,7 +208,9 @@ svg .fill{fill:currentColor;stroke:none}
         </div>
       </div>
     </div>
-    <div class="dpad-cell">
+    <div class="pad">
+      <div id="btnL" class="sbtn l" data-b="l" aria-hidden="true">l</div>
+      <div id="btnR" class="sbtn r" data-b="r" aria-hidden="true">r</div>
       <div id="dpad" class="dpad" aria-hidden="true">
         <div class="arm up" data-b="up"></div>
         <div class="arm down" data-b="down"></div>
@@ -186,17 +218,12 @@ svg .fill{fill:currentColor;stroke:none}
         <div class="arm right" data-b="right"></div>
         <div class="arm mid"></div>
       </div>
-    </div>
-    <div class="face-cell">
-      <div class="face" aria-hidden="true">
-        <div id="btnB" class="fbtn b" data-b="b">b</div>
-        <div id="btnA" class="fbtn a" data-b="a">a</div>
+      <div id="face" class="face" aria-hidden="true"></div>
+      <div class="meta">
+        <button id="menuBtn" class="icon menu-btn" type="button" aria-label="Menu" title="Menu"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
+        <div id="btnSelect" class="mbtn" data-b="select">select</div>
+        <div id="btnStart" class="mbtn" data-b="start">start</div>
       </div>
-    </div>
-    <div class="meta-cell">
-      <button id="menuBtn" class="icon menu-btn" type="button" aria-label="Menu" title="Menu"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
-      <div id="btnSelect" class="mbtn" data-b="select">select</div>
-      <div id="btnStart" class="mbtn" data-b="start">start</div>
     </div>
   </section>
 
@@ -221,7 +248,7 @@ svg .fill{fill:currentColor;stroke:none}
   <div id="more" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
       <div class="modal-head">
-        <p id="moreTitle" class="modal-title">pocket 6502</p>
+        <p id="moreTitle" class="modal-title">emu emu</p>
         <button id="moreClose" class="icon" type="button" aria-label="Close" title="Close"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
       </div>
       <div class="stack">
@@ -238,13 +265,13 @@ svg .fill{fill:currentColor;stroke:none}
         <button id="helpClose" class="icon" type="button" aria-label="Close" title="Close"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
       </div>
       <dl class="help">
-        <dt>games</dt><dd>.nes or .zip files. they're kept in this browser only.</dd>
+        <dt>games</dt><dd>nes, snes, game boy, gba and sega files, or .zip. each goes in its system's tab. they're kept in this browser only.</dd>
         <dt>d-pad</dt><dd>slide for diagonals.</dd>
         <dt>a + b</dt><dd>press between them for both.</dd>
         <dt>saving</dt><dd>one save state per game, in the menu. in-game saves are kept too, and games resume where you left off.</dd>
         <dt>no sound?</dt><dd>turn off your phone's silent mode.</dd>
         <dt>controller</dt><dd>plug in a phone controller and press any button.</dd>
-        <dt>keys</dt><dd>arrows, z = b, x = a, enter = start, shift = select, esc = menu.</dd>
+        <dt>keys</dt><dd>arrows, z = b, x = a, a = y, s = x, q = l, w = r, enter = start, shift = select, esc = menu. sega: z x c = a b c.</dd>
       </dl>
     </div>
   </div>
@@ -267,12 +294,49 @@ svg .fill{fill:currentColor;stroke:none}
   <div id="drop" class="drop" hidden>drop to add</div>
 </div>
 
-<script src="vendor/fceumm/fceumm_libretro.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+
+/* ================= systems ================= */
+// One EmulatorJS-built libretro core per system, in vendor/<core>/. Each game's system comes from its file type.
+// ids = libretro joypad ids (B 0, Y 1, select 2, start 3, up 4, down 5, left 6, right 7, A 8, X 9, L 10, R 11);
+// genesis_plus_gx maps Genesis A/B/C to libretro Y/B/A, and Master System 1/2 to B/A (checked with test ROMs).
+const IDS = { b:0, y:1, select:2, start:3, up:4, down:5, left:6, right:7, a:8, x:9, l:10, r:11 };
+const SYSTEMS = {
+  nes:  { label:'nes', core:'fceumm', exts:['nes'], hint:'.nes or .zip', ar:'256/240', face:'two', select:true,
+          opts:'fceumm_aspect = "PP"\nfceumm_overscan_v_top = "0"\nfceumm_overscan_v_bottom = "0"\n' },
+  snes: { label:'snes', core:'snes9x', exts:['sfc','smc','swc','fig'], hint:'.sfc, .smc or .zip', ar:'256/224', face:'snes', lr:true, select:true,
+          opts:'snes9x_aspect = "uncorrected"\n' },
+  gb:   { label:'game boy', core:'gambatte', exts:['gb','gbc'], hint:'.gb, .gbc or .zip', ar:'160/144', face:'two', select:true, opts:'' },
+  gba:  { label:'gba', core:'mgba', exts:['gba'], hint:'.gba or .zip', ar:'240/160', face:'two', lr:true, select:true, opts:'' },
+  sega: { label:'sega', core:'genesis_plus_gx', exts:['md','gen','smd','bin','sms','gg','sg'], hint:'.md, .sms, .gg or .zip', ar:'4/3', face:'genesis',
+          ids:{ a:1, b:0, c:8 }, opts:'genesis_plus_gx_aspect_ratio = "4:3"\n' }
+};
+// Master System, Game Gear and SG-1000 games live in the sega tab but have two buttons (1, 2) and pause (start)
+function layoutOf(meta){
+  const sys = SYSTEMS[meta.sys || 'nes'], ext = meta.ext || 'nes';
+  if(meta.sys === 'sega' && /^(sms|gg|sg)$/.test(ext))
+    return Object.assign({}, sys, { face:'two', labels:{ b:'1', a:'2' }, ids:{}, ar: ext === 'gg' ? '160/144' : '4/3',
+      opts: ext === 'gg' ? 'genesis_plus_gx_aspect_ratio = "Uncorrected"\n' : sys.opts });
+  return sys;
+}
+const sysOf = meta => meta.sys || 'nes';
+const extOf = name => (name.match(/\.([a-z0-9]+)$/i) || [,''])[1].toLowerCase();
+const GAME_EXT = /\.(nes|sfc|smc|swc|fig|gb|gbc|gba|md|gen|smd|bin|sms|gg|sg)$/i;
+function detect(name, u8){
+  const ext = extOf(name);
+  if(isNes(u8)) return { sys:'nes', ext:'nes' };
+  if(ext === 'nes') return null;
+  if(ext === 'bin'){ // ambiguous: only Genesis carts, which say SEGA in their header
+    const h = String.fromCharCode(...u8.subarray(0x100, 0x104));
+    return h === 'SEGA' ? { sys:'sega', ext:'md' } : null;
+  }
+  for(const k in SYSTEMS) if(SYSTEMS[k].exts.includes(ext)) return { sys:k, ext };
+  return null;
+}
 
 /* ================= storage (IndexedDB, falls back to memory) ================= */
 const STORES = ['meta','data','states','slots','sram'];
@@ -356,12 +420,23 @@ function setEditing(v){
   $('#addBtn').hidden = editing; $('#moreBtn').hidden = editing; $('#doneBtn').hidden = !editing;
 }
 const X_ICON = '<svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg>';
+let tab = prefs.get('tab', 'nes'); if(!SYSTEMS[tab]) tab = 'nes';
+function drawTabs(){ document.querySelectorAll('#tabs button').forEach(b => { const on = b.dataset.sys === tab; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-sys]'); if(!b || b.dataset.sys === tab) return;
+  tab = b.dataset.sys; prefs.set('tab', tab); setEditing(false); renderLibrary();
+});
 async function renderLibrary(){
-  let roms = [];
-  try{ roms = await store.list(); }catch(e){ roms = []; }
+  let all = [];
+  try{ all = await store.list(); }catch(e){ all = []; }
+  drawTabs();
+  const roms = all.filter(r => sysOf(r) === tab);
   roms.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:'base'}));
   romCount = roms.length;
+  $('#addBigText').textContent = `add a ${SYSTEMS[tab].label} game`;
+  $('#addBigExt').textContent = SYSTEMS[tab].hint;
   $('#addBig').hidden = roms.length > 0;
+  prepareCores(all);
   if(!roms.length) setEditing(false);
   listEl.innerHTML = roms.map(r => `<li class="rom" data-id="${r.id}">
       <button class="rom-play" data-act="play" type="button"><span class="rom-name">${esc(r.name)}</span></button>
@@ -410,17 +485,19 @@ $('#editBtn').addEventListener('click', () => { $('#more').hidden = true; setEdi
 fileIn.addEventListener('change', () => { importFiles([...fileIn.files]); fileIn.value = ''; });
 
 async function addOne(fileName, u8, report){
-  if(!isNes(u8)){ report.bad.push(fileName); return; }
+  const kind = detect(fileName, u8);
+  if(!kind){ report.bad.push(fileName); return; }
   const id = fnv(u8);
   let existing = null; try{ existing = await store.getMeta(id); }catch(e){}
   if(existing){ report.dupe.push(existing.name); return; }
-  const meta = { id, name: cleanName(fileName), file: fileName, size: u8.length, mapper: mapperOf(u8), added: Date.now(), played: 0 };
-  try{ await store.add(meta, u8); report.added.push(meta.name); }
+  const meta = { id, name: cleanName(fileName), file: fileName, size: u8.length, sys: kind.sys, ext: kind.ext, added: Date.now(), played: 0 };
+  if(kind.sys === 'nes') meta.mapper = mapperOf(u8);
+  try{ await store.add(meta, u8); report.added.push(meta.name); report.sys.push(kind.sys); }
   catch(e){ report.failed.push(fileName); }
 }
 async function importFiles(files){
   if(!files.length) return;
-  const report = { added:[], dupe:[], bad:[], failed:[] };
+  const report = { added:[], sys:[], dupe:[], bad:[], failed:[] };
   for(const f of files){
     let u8; try{ u8 = new Uint8Array(await f.arrayBuffer()); }catch(e){ report.failed.push(f.name); continue; }
     if(isZip(u8)){
@@ -428,7 +505,7 @@ async function importFiles(files){
       try{
         const z = await JSZip.loadAsync(u8); let found = 0;
         for(const entry of Object.values(z.files)){
-          if(entry.dir || !/\.nes$/i.test(entry.name) || /(^|\/)__MACOSX\//.test(entry.name)) continue;
+          if(entry.dir || !GAME_EXT.test(entry.name) || /(^|\/)__MACOSX\//.test(entry.name)) continue;
           found++; await addOne(entry.name.split('/').pop(), await entry.async('uint8array'), report);
         }
         if(!found) report.bad.push(f.name);
@@ -436,9 +513,14 @@ async function importFiles(files){
     } else await addOne(f.name, u8, report);
   }
   const msgs = [];
-  if(report.added.length) msgs.push(report.added.length === 1 ? `added ${report.added[0]}.` : `added ${report.added.length} games.`);
+  if(report.added.length === 1) msgs.push(`added ${report.added[0]}.`);
+  else if(report.added.length){
+    const n = {}; report.sys.forEach(k => n[k] = (n[k] || 0) + 1);
+    msgs.push('added ' + Object.keys(n).map(k => `${n[k]} ${SYSTEMS[k].label} game${n[k] > 1 ? 's' : ''}`).join(', ') + '.');
+  }
+  if(report.sys.length){ tab = report.sys[report.sys.length - 1]; prefs.set('tab', tab); }
   if(report.dupe.length) msgs.push(`already added: ${report.dupe.join(', ')}.`);
-  if(report.bad.length) msgs.push(`not an nes game: ${report.bad.join(', ')}.`);
+  if(report.bad.length) msgs.push(`not a game file: ${report.bad.join(', ')}.`);
   if(report.failed.length) msgs.push(`couldn’t add ${report.failed.join(', ')}. storage may be full.`);
   noteEl.textContent = msgs.join(' ');
   noteEl.hidden = false;
@@ -458,28 +540,50 @@ addEventListener('drop', e => { if(drop.hidden) return; e.preventDefault(); drag
 // are ours; its own keyboard and gamepad handling are switched off (keyboard listens on a detached element,
 // joypad driver "null"), and buttons are fed in with simulate_input.
 // One game per page load: leaving a game saves, then reloads the page so the core's memory is fully freed.
-const CORE_WASM = 'vendor/fceumm/fceumm_libretro.wasm';
+const coreUrl = (sys, kind) => { const c = SYSTEMS[sys].core; return `vendor/${c}/${c}_libretro.${kind}`; };
 const RA_CFG = [
   'savefile_directory = "/data/saves"', 'sort_savefiles_enable = "false"', 'sort_savefiles_by_content_enable = "false"',
   'savestate_auto_save = "false"', 'savestate_auto_load = "false"', 'autosave_interval = "0"', 'block_sram_overwrite = "false"',
   'video_smooth = "false"', 'video_vsync = "true"', 'video_font_enable = "false"', 'fps_show = "false"', 'audio_latency = "64"',
   'input_joypad_driver = "null"', 'input_autodetect_enable = "false"', 'pause_nonactive = "false"'
 ].join('\n') + '\n';
-// square pixels and the full 256x240 picture, same as before
-const CORE_OPTS = 'fceumm_aspect = "PP"\nfceumm_overscan_v_top = "0"\nfceumm_overscan_v_bottom = "0"\n';
-// libretro joypad ids
-const BTN = { b:0, select:2, start:3, up:4, down:5, left:6, right:7, a:8 };
+let BTN = IDS; // button name -> libretro id for the game that's open
 
 function fsWrite(FS, path, data){
   let dir = '';
   path.split('/').slice(1, -1).forEach(p => { dir += '/' + p; try{ FS.mkdir(dir); }catch(e){} });
   FS.writeFile(path, data);
 }
-let wasmP = null;
-function compileCore(){
-  if(!wasmP) wasmP = fetch(CORE_WASM).then(r => { if(!r.ok) throw new Error('core'); return r.arrayBuffer(); }).then(b => WebAssembly.compile(b));
-  wasmP.catch(() => { wasmP = null; });
+// compile a system's core ahead of time (the tab you're on), so tapping a game is quick. Only one is kept.
+let wasmP = null, wasmSys = null;
+function compileCore(sys){
+  if(wasmSys !== sys || !wasmP){
+    wasmSys = sys;
+    const p = wasmP = fetch(coreUrl(sys, 'wasm')).then(r => { if(!r.ok) throw new Error('core'); return r.arrayBuffer(); }).then(b => WebAssembly.compile(b));
+    p.catch(() => { if(wasmP === p) wasmP = null; });
+  }
   return wasmP;
+}
+function loadCoreScript(sys){
+  return new Promise((res, rej) => {
+    if(typeof window.EJS_Runtime === 'function') return res();
+    const el = document.createElement('script'); el.src = coreUrl(sys, 'js'); el.onload = res; el.onerror = rej;
+    document.head.appendChild(el);
+  });
+}
+// keep every system you have games for on the phone (the service worker stores what's fetched), so it works offline
+const fetched = new Set();
+function prepareCores(all){
+  const used = new Set(all.map(sysOf));
+  setTimeout(async () => {
+    for(const sys of used){
+      for(const kind of ['js','wasm']){
+        const url = coreUrl(sys, kind); if(fetched.has(url)) continue; fetched.add(url);
+        try{ if(window.caches && await caches.match(url)) continue; await fetch(url); }catch(e){ fetched.delete(url); }
+      }
+    }
+  }, 1500);
+  if(used.has(tab)) setTimeout(() => compileCore(tab).catch(()=>{}), 300);
 }
 
 // audio: the core makes its own AudioContext once it starts, which is after the tap, so iOS would keep it muted.
@@ -584,12 +688,13 @@ let starting = false;
 async function startGame(id){
   unlockAudio(); // must run inside the tap
   if(starting || F) return;
-  if(typeof window.EJS_Runtime !== 'function'){ noteEl.textContent = 'couldn’t load the emulator. check your connection and reload.'; noteEl.hidden = false; return; }
   starting = true;
   let meta, data;
   try{ meta = await store.getMeta(id); data = await store.getData(id); }catch(e){}
   if(!meta || !data){ starting = false; noteEl.textContent = 'couldn’t open that game. remove it and add it again.'; noteEl.hidden = false; return; }
   cur = meta;
+  const sys = sysOf(meta), lay = layoutOf(meta);
+  buildPad(lay);
   $('#error').hidden = true; $('#confirm').hidden = true;
   $('#menuTitle').textContent = meta.name; $('#menu').hidden = true;
   showPlayer();
@@ -602,12 +707,12 @@ async function startGame(id){
   try{ const v = await store.get('slots', id); slotAt = (v && v.s instanceof Uint8Array) ? v.at : 0; }catch(e){}
   drawSlot();
   try{
-    const wasm = await compileCore();
+    const [wasm] = await Promise.all([compileCore(sys), loadCoreScript(sys)]);
     const mod = {};
     M = await window.EJS_Runtime(Object.assign(mod, {
       noInitialRun: true, arguments: [], preRun: [], postRun: [],
       canvas: cv, parent: document.createElement('div'),
-      callbacks: { setupCoreSettingFile: p => fsWrite(mod.FS, p, CORE_OPTS) },
+      callbacks: { setupCoreSettingFile: p => fsWrite(mod.FS, p, lay.opts) },
       print(){}, printErr(){},
       locateFile: f => f,
       instantiateWasm(imports, done){ WebAssembly.instantiate(wasm, imports).then(i => done(i, wasm)); return {}; },
@@ -625,13 +730,14 @@ async function startGame(id){
     frame: M.cwrap('get_current_frame_count', 'number', [])
   };
   fsWrite(M.FS, '/home/web_user/.config/retroarch/retroarch.cfg', RA_CFG);
-  fsWrite(M.FS, '/game.nes', data instanceof Uint8Array ? data : new Uint8Array(data));
+  const gamePath = '/game.' + (meta.ext || 'nes');
+  fsWrite(M.FS, gamePath, data instanceof Uint8Array ? data : new Uint8Array(data));
   if(sram instanceof Uint8Array){ fsWrite(M.FS, '/data/saves/game.srm', sram); lastSram = sram; }
   else fsWrite(M.FS, '/data/saves/.keep', '');
-  try{ M.callMain(['/game.nes']); M.resumeMainLoop && M.resumeMainLoop(); }
+  try{ M.callMain([gamePath]); M.resumeMainLoop && M.resumeMainLoop(); }
   catch(e){ starting = false; crash(); return; }
   running = true; paused = false; starting = false;
-  pressed.forEach(b => F.input(0, BTN[b], 1));
+  pressed.forEach(b => { if(BTN[b] !== undefined) F.input(0, BTN[b], 1); });
   // pick up where you left off
   if(state instanceof Uint8Array){ await nextFrame(); await nextFrame(); try{ putState(state); }catch(e){} }
   else if(state){ store.del('states', id).catch(()=>{}); }
@@ -702,12 +808,32 @@ $('#soundBtn').addEventListener('click', () => { soundOn = !soundOn; prefs.set('
 drawSoundBtn();
 
 /* ================= touch controls ================= */
-const els = {};
-document.querySelectorAll('#player [data-b]').forEach(el => els[el.dataset.b] = el);
-let R = {};
+// Face-button layouts, in points on a 390-point-wide phone (see the CSS note): box size, gap to the right edge,
+// extra touch margin, and each button as [name, x, y, diameter] inside the box. From Delta's official layouts.
+const FACES = {
+  two:     { w:152, h:102, right:4, pad:20, btns:[['b',0,34,68], ['a',84,0,68]] },
+  snes:    { w:168, h:168, right:0, pad:8,  btns:[['x',54,0,60], ['y',0,54,60], ['a',108,54,60], ['b',54,108,60]] },
+  genesis: { w:190, h:98,  right:0, pad:8,  btns:[['a',0,40,58], ['b',66,20,58], ['c',132,0,58]] }
+};
+const U = n => `calc(var(--u)*${n})`;
+let els = {}, facePad = 20;
+function buildPad(lay){
+  const f = FACES[lay.face], face = $('#face'), pl = $('#player');
+  BTN = Object.assign({}, IDS, lay.ids || {});
+  if(lay.face !== 'genesis') delete BTN.c;
+  pl.style.setProperty('--ar', lay.ar);
+  pl.classList.toggle('has-lr', !!lay.lr);
+  pl.classList.toggle('no-select', !lay.select);
+  face.style.width = U(f.w); face.style.height = U(f.h); face.style.right = U(f.right);
+  facePad = f.pad;
+  face.innerHTML = f.btns.map(([b, x, y, d]) => `<div class="fbtn" data-b="${b}" style="left:${U(x)};top:${U(y)};width:${U(d)};height:${U(d)};font-size:${U(Math.round(d * 0.3))}">${esc((lay.labels && lay.labels[b]) || b)}</div>`).join('');
+  els = {};
+  pl.querySelectorAll('[data-b]').forEach(el => els[el.dataset.b] = el);
+}
+let R = { dpad:null, face:[], side:[], meta:[] };
 function measure(){
-  const r = el => el.getBoundingClientRect();
-  R = { dpad: r($('#dpad')), a: r($('#btnA')), b: r($('#btnB')), select: r($('#btnSelect')), start: r($('#btnStart')) };
+  const all = sel => [...$('#player').querySelectorAll(sel)].map(el => ({ b: el.dataset.b, r: el.getBoundingClientRect() })).filter(o => o.r.width > 0);
+  R = { dpad: $('#dpad').getBoundingClientRect(), face: all('.fbtn'), side: all('.sbtn'), meta: all('.mbtn') };
 }
 addEventListener('resize', () => { if(!$('#player').hidden) measure(); });
 addEventListener('orientationchange', () => setTimeout(measure, 300));
@@ -715,9 +841,10 @@ addEventListener('orientationchange', () => setTimeout(measure, 300));
 const inRect = (r,x,y,p) => x >= r.left-p && x <= r.right+p && y >= r.top-p && y <= r.bottom+p;
 const inCircle = (r,x,y,p) => { const cx = r.left+r.width/2, cy = r.top+r.height/2, rad = r.width/2+p; return (x-cx)**2 + (y-cy)**2 <= rad*rad; };
 function zoneAt(x,y){
-  if(inRect(R.dpad,x,y,28)) return 'dpad';
-  if(inCircle(R.a,x,y,22) || inCircle(R.b,x,y,22)) return 'face';
-  if(inRect(R.select,x,y,12) || inRect(R.start,x,y,12)) return 'meta';
+  if(R.dpad && R.dpad.width && inRect(R.dpad,x,y,18)) return 'dpad';
+  if(R.face.some(o => inCircle(o.r,x,y,facePad + 2))) return 'face';
+  if(R.side.some(o => inRect(o.r,x,y,10))) return 'side';
+  if(R.meta.some(o => inRect(o.r,x,y,12))) return 'meta';
   return null;
 }
 function buttonsAt(zone,x,y){
@@ -729,11 +856,11 @@ function buttonsAt(zone,x,y){
     if(ax > ay*0.45) s.add(dx < 0 ? 'left' : 'right');
     if(ay > ax*0.45) s.add(dy < 0 ? 'up' : 'down');
   } else if(zone === 'face'){
-    if(inCircle(R.a,x,y,20)) s.add('a');
-    if(inCircle(R.b,x,y,20)) s.add('b');
+    R.face.forEach(o => { if(inCircle(o.r,x,y,facePad)) s.add(o.b); });
+  } else if(zone === 'side'){
+    R.side.forEach(o => { if(inRect(o.r,x,y,10)) s.add(o.b); });
   } else if(zone === 'meta'){
-    if(inRect(R.select,x,y,12)) s.add('select');
-    if(inRect(R.start,x,y,12)) s.add('start');
+    R.meta.forEach(o => { if(inRect(o.r,x,y,12)) s.add(o.b); });
   }
   return s;
 }
@@ -744,8 +871,8 @@ function sync(){
   padKeys.forEach(b => want.add(b));
   touches.forEach(t => t.set.forEach(b => want.add(b)));
   let fresh = false;
-  want.forEach(b => { if(!pressed.has(b)){ fresh = true; els[b] && els[b].classList.add('on'); if(F && !paused) F.input(0, BTN[b], 1); } });
-  pressed.forEach(b => { if(!want.has(b)){ els[b] && els[b].classList.remove('on'); if(F) F.input(0, BTN[b], 0); } });
+  want.forEach(b => { if(!pressed.has(b)){ fresh = true; els[b] && els[b].classList.add('on'); if(F && !paused && BTN[b] !== undefined) F.input(0, BTN[b], 1); } });
+  pressed.forEach(b => { if(!want.has(b)){ els[b] && els[b].classList.remove('on'); if(F && BTN[b] !== undefined) F.input(0, BTN[b], 0); } });
   pressed = want;
   if(fresh && touches.size) vibrate();
 }
@@ -776,14 +903,17 @@ player.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('touchmove', e => { if(!$('#player').hidden) e.preventDefault(); }, { passive:false });
 
-// keyboard for desktop: arrows, Z = B, X = A, Enter = Start, Shift = Select
-const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyZ:'b', KeyX:'a', Enter:'start', ShiftLeft:'select', ShiftRight:'select' };
-addEventListener('keydown', e => { const b = KEYMAP[e.code]; if(!b || $('#player').hidden || !$('#confirm').hidden || !$('#menu').hidden) return; e.preventDefault(); keys.add(b); sync(); });
-addEventListener('keyup', e => { const b = KEYMAP[e.code]; if(!b) return; keys.delete(b); sync(); });
+// keyboard for desktop: arrows, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start, Shift = Select (sega: Z X C = A B C)
+const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyZ:'b', KeyX:'a', KeyA:'y', KeyS:'x', KeyQ:'l', KeyW:'r', Enter:'start', ShiftLeft:'select', ShiftRight:'select' };
+const KEYMAP_SEGA = Object.assign({}, KEYMAP, { KeyZ:'a', KeyX:'b', KeyC:'c' });
+const keyFor = code => (cur && sysOf(cur) === 'sega' && BTN.c !== undefined ? KEYMAP_SEGA : KEYMAP)[code];
+addEventListener('keydown', e => { const b = keyFor(e.code); if(!b || $('#player').hidden || !$('#confirm').hidden || !$('#menu').hidden) return; e.preventDefault(); keys.add(b); sync(); });
+addEventListener('keyup', e => { const b = keyFor(e.code); if(!b) return; keys.delete(b); sync(); });
 
 /* ================= physical controllers (gameplay only) ================= */
 // Uses the standard Gamepad API, so any MFi / USB / Bluetooth controller works, e.g. 8BitDo FlipPad.
-// A/B mapping tested on the 8BitDo FlipPad: buttons 0/2 = A, 1/3 = B (the owner reported the old mapping was swapped).
+// The 8BitDo FlipPad reports its buttons by label (0 = A on the right, 1 = B bottom, 2 = X top, 3 = Y left): the owner
+// confirmed 0/2 = A, 1/3 = B for NES. Other systems follow the labels; Genesis A/B/C sit on Y/B/A, the same left-to-right row.
 const padKeys = new Set();
 let padMode = false;
 function firstPad(){
@@ -804,11 +934,15 @@ function pollPad(){
   if(!padMode) setPadMode(true);
   const btn = i => { const b = gp.buttons[i]; return !!b && (b.pressed || b.value > 0.5); };
   const ax = gp.axes || [];
-  const now = {
-    a: btn(0) || btn(2), b: btn(1) || btn(3), select: btn(8), start: btn(9),
+  const lay = cur ? layoutOf(cur).face : 'two';
+  const now = lay === 'snes' ? { a: btn(0), b: btn(1), x: btn(2), y: btn(3) }
+    : lay === 'genesis' ? { a: btn(3), b: btn(1), c: btn(0) || btn(2) }
+    : { a: btn(0) || btn(2), b: btn(1) || btn(3) };
+  Object.assign(now, {
+    l: btn(4) || btn(6), r: btn(5) || btn(7), select: btn(8), start: btn(9),
     up: btn(12) || ax[1] < -0.5, down: btn(13) || ax[1] > 0.5,
     left: btn(14) || ax[0] < -0.5, right: btn(15) || ax[0] > 0.5
-  };
+  });
   const active = !$('#player').hidden && F && !paused;
   let changed = false;
   for(const k in now){
@@ -832,11 +966,9 @@ let storageWarning = '';
   const ok = await openDB();
   if(!ok){ storageWarning = 'this browser blocks storage, so games are gone when you close the page.'; }
   else { try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){} }
-  if(typeof window.EJS_Runtime !== 'function') storageWarning = 'couldn’t load the emulator. check your connection and reload.';
   if(storageWarning){ noteEl.textContent = storageWarning; noteEl.hidden = false; }
   renderLibrary();
   requestAnimationFrame(loop);
-  setTimeout(() => compileCore().catch(()=>{}), 300); // get the emulator ready before a game is tapped
 })();
 })();
 </script>
