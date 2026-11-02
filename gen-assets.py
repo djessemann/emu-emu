@@ -1,5 +1,5 @@
 # gen-assets.py — regenerates the app icons and the social preview image (og.png)
-# Mark: a white 8-bit TV with antennas, a tiny controller (d-pad + two buttons) on its screen. Black background.
+# Mark: a white 8-bit ring on black.
 # Pure Python, no dependencies (stdlib zlib only). Run: python3 gen-assets.py
 import zlib, struct
 
@@ -26,21 +26,12 @@ def write_png(path, px, w, h):
         + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
         + chunk(b'IDAT', comp) + chunk(b'IEND', b''))
 
-# 16x13 TV: antennas, 1px frame, on the screen a d-pad (left) and two buttons (right, diagonal like the app)
-TV = ["...W.......W....",
-      "....W.....W.....",
-      ".....W...W......",
-      "WWWWWWWWWWWWWWWW",
-      "W..............W",
-      "W..............W",
-      "W...W.......W..W",
-      "W..WWW....W....W",
-      "W...W..........W",
-      "W..............W",
-      "W..............W",
-      "WWWWWWWWWWWWWWWW",
-      ".WW..........WW.",
-      "................"]
+# 16x16 ring: an 8-bit circle, 2 pixels thick
+def ring_art(n=16, t=2):
+    import math
+    c = (n - 1) / 2; ro = n / 2; ri = ro - t
+    return [''.join('W' if ri - 0.15 <= math.hypot(x - c, y - c) <= ro - 0.15 else '.' for x in range(n)) for y in range(n)]
+RING = ring_art()
 
 def draw(px, w, h, art, ox, oy, s, c):
     for ry, row in enumerate(art):
@@ -48,12 +39,11 @@ def draw(px, w, h, art, ox, oy, s, c):
             if ch == 'W': rect(px, w, h, ox + rx * s, oy + ry * s, s, s, c)
 
 BG, WHITE, GREY = rgba('#000000'), rgba('#FFFFFF'), rgba('#999999')
-TW, TH = len(TV[0]), len(TV) - 1   # last row is spacing
 
 def icon(size, path):
-    s = max(1, int(size * 0.74) // TW)
+    s = max(1, int(size * 0.62) // 16)
     px = canvas(size, size, BG)
-    draw(px, size, size, TV, (size - TW * s) // 2, (size - TH * s) // 2, s, WHITE)
+    draw(px, size, size, RING, (size - 16 * s) // 2, (size - 16 * s) // 2, s, WHITE)
     write_png(path, px, size, size)
 
 # 5x8 lowercase pixel font, just the letters the preview needs
@@ -82,11 +72,10 @@ def og(path):
     px = canvas(w, h, BG)
     rect(px, w, h, 40, 40, w - 80, 1, WHITE); rect(px, w, h, 40, h - 41, w - 80, 1, WHITE)
     rect(px, w, h, 40, 40, 1, h - 80, WHITE); rect(px, w, h, w - 41, 40, 1, h - 80, WHITE)
-    s = 20; tvw = TW * s
-    draw(px, w, h, TV, 110, (h - TH * s) // 2, s, WHITE)
-    tx = 110 + tvw + 80
-    text(px, w, h, 'emu emu', tx, 230, 13, WHITE)
-    text(px, w, h, 'nes . snes . gb . gba . sega', tx, 370, 3, GREY)
+    s = 20; draw(px, w, h, RING, 150, (h - 16 * s) // 2, s, WHITE)
+    tx = 150 + 16 * s + 100
+    text(px, w, h, 'emu', tx, 220, 16, WHITE)
+    text(px, w, h, 'nes . snes . gb . gba . sega', tx, 380, 3, GREY)
     write_png(path, px, w, h)
 
 icon(32, 'favicon.png'); icon(180, 'apple-touch-icon.png')

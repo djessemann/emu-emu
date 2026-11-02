@@ -1,4 +1,4 @@
-# emu emu
+# emu
 
 A simple game player for your phone: NES, SNES, Game Boy / Game Boy Color, GBA, and Sega (Genesis, Master System, Game Gear). Portrait layout, touch controls, a game library with a tab per system, save states, and plug-in controller support (8BitDo FlipPad, any MFi / Bluetooth / USB pad).
 
@@ -27,4 +27,4 @@ Live: `https://djessemann.github.io/emu-emu/`
 | `*.png` | Icons and the social preview (`og.png`), made by `gen-assets.py` |
 | `CLAUDE.md` | Project notes for Claude Code |
 
-The cores are the web builds EmulatorJS publishes on npm (`@emulatorjs/core-*`, 4.2.3). Each folder has the core's license. emu emu is free and will stay free.
+The cores are the web builds EmulatorJS publishes on npm (`@emulatorjs/core-*`, 4.2.3). Each folder has the core's license. emu is free and will stay free.

@@ -1,6 +1,6 @@
-# emu emu — project notes for Claude Code
+# emu — project notes for Claude Code
 
-**emu emu** (formerly Pocket 6502) is a dead-simple multi-system emulator for phones: NES, SNES, Game Boy / Color, GBA and Sega (Genesis, Master System, Game Gear). Portrait first, touch controls, a game library with one tab per system, one save state per game, and plug-in controller support. Hosted on GitHub Pages. It stays free (no paid version planned).
+**emu** (formerly emu emu, Pocket 6502; the repo and URL stay `emu-emu`) is a dead-simple multi-system emulator for phones: NES, SNES, Game Boy / Color, GBA and Sega (Genesis, Master System, Game Gear). Portrait first, touch controls, a game library with one tab per system, one save state per game, and plug-in controller support. Hosted on GitHub Pages. It stays free (no paid version planned).
 
 - Repo: `djessemann/emu-emu` (default branch `main`; earlier names `snappy-emu`, `6502-emu`)
 - Live: `https://djessemann.github.io/emu-emu/`
@@ -32,7 +32,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`emuemu-v7` → `v8` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell plus the NES core; everything else the app fetches, including the other cores, is stored the first time it loads (runtime caching in the fetch handler).
+- **Bump `CACHE` in `sw.js`** (`emuemu-v8` → `v9` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell plus the NES core; everything else the app fetches, including the other cores, is stored the first time it loads (runtime caching in the fetch handler).
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
@@ -99,7 +99,7 @@ Taken from Delta's official iPhone portrait layouts (rileytestut/NESDeltaCore, S
 - **Active / held = inverted:** white fill, black text.
 - Dialogs are in-app overlays (black box, white border), never `alert/confirm/prompt`. Confirm pattern: `cancel` outlined + primary inverted.
 - Copy is lowercase, short, and plain. Owner did a UX pass to strip it down: prefer icons where the meaning is obvious (`+`, `···`, `☰`, `×`, library grid, restart arrow, speaker), and keep words only where an icon would be a guess (`select`, `start`, `a`, `b`, `save`, `load`, `done`). No timestamps, file sizes, or "may not run" labels — those were removed on purpose.
-- Icons are inline SVG, 20px, `stroke: currentColor`, square line caps. App icon: a white 8-bit TV with antennas and a tiny controller (d-pad + two buttons) on its screen, on black (`gen-assets.py`, which also makes `og.png`).
+- Icons are inline SVG, 20px, `stroke: currentColor`, square line caps. App icon: a white 8-bit ring (16×16 grid, 2 pixels thick) on black (`gen-assets.py`, which also makes `og.png`).
 
 ## Git
 

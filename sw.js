@@ -1,8 +1,8 @@
-// emu emu service worker: makes the app open offline.
+// emu service worker: makes the app open offline.
 // The app shell (and the NES core) is stored on install. Every other file the app fetches (the other systems'
 // emulator cores, fetched when you have games for them) is stored the first time it loads.
 // Bump CACHE whenever any file changes, or installed users keep the old version.
-const CACHE = 'emuemu-v7';
+const CACHE = 'emuemu-v8';
 const ASSETS = [
   './',
   'index.html',

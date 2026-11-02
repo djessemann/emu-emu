@@ -1,6 +1,6 @@
 {
-  "name": "emu emu",
-  "short_name": "emu emu",
+  "name": "emu",
+  "short_name": "emu",
   "description": "A simple game player for your phone: NES, SNES, Game Boy, GBA and Sega.",
   "start_url": "./",
   "scope": "./",
