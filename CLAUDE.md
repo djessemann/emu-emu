@@ -32,7 +32,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`emuemu-v8` → `v9` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell plus the NES core; everything else the app fetches, including the other cores, is stored the first time it loads (runtime caching in the fetch handler).
+- **Bump `CACHE` in `sw.js`** (`emuemu-v9` → `v10` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell plus the NES core; everything else the app fetches, including the other cores, is stored the first time it loads (runtime caching in the fetch handler).
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
@@ -54,6 +54,7 @@ Taken from Delta's official iPhone portrait layouts (rileytestut/NESDeltaCore, S
 
 ### Input
 - **Touch:** one pointer handler on `#player` hit-tests zones by rectangle (`measure()` caches rects). D-pad is 8-way by angle from center with a small dead zone, and a thumb that starts on it stays locked to it while sliding. Pressing between A and B hits both. Light haptic tick where supported.
+- **No selectable text:** every element in `#app` has `user-select: none` and `-webkit-touch-callout: none`, control labels are CSS `::before{content:attr(data-label)}` (no text node), and `touchstart` on the player is cancelled except on real `<button>`s. Together these stop iOS's press-and-hold magnifier (the Liquid Glass loupe) and copy menu on the controls.
 - **Touch hit-testing** works on whatever `[data-b]` elements are visible: d-pad rect, face circles, `l`/`r` and select/start rects.
 - **Keyboard:** arrows, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start, Shift = Select, Esc = menu. Genesis: Z X C = A B C.
 - **Controllers (gameplay only, by owner's choice — no menu/library navigation):** standard Gamepad API, polled every frame while the player is open. Any connected pad flips the player into `pad-mode`: on-screen d-pad/A/B/select/start hide, the screen gets bigger, ☰ stays. The FlipPad reports buttons by label (0 = A on the right, 1 = B bottom, 2 = X top, 3 = Y left); the owner confirmed for NES that 0/2 = A, 1/3 = B (the old by-position mapping was backwards). SNES: a 0, b 1, x 2, y 3. Genesis: A 3, B 1, C 0/2 (the left-to-right row). L 4/6, R 5/7. D-pad 12–15 plus left stick, select 8, start 9. Built for the **8BitDo FlipPad** (USB-C, Apple-supported). Browsers only report a pad after its first button press.

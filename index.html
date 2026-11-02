@@ -31,6 +31,10 @@
    and a page can't turn it off. Keep content clear of it. (iOS can also report a 0 inset here, hence the floor.) */
 @media (display-mode:standalone) and (pointer:coarse) and (orientation:portrait){:root{padding-top:max(calc(env(safe-area-inset-top, 0px) + 40px), 90px)}}
 [hidden]{display:none!important}
+/* nothing in the app is selectable text: stops iOS's press-and-hold magnifier and copy/paste menu */
+#app, #app *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* control labels are drawn by CSS, so there's no text node for iOS to grab */
+[data-label]::before{content:attr(data-label)}
 img{max-width:100%}
 
 /* Same system as nesprite and nes-tracker: black, white 1px lines, monospace, square corners, inverted = active. Single dark theme by design. */
@@ -209,8 +213,8 @@ svg .fill{fill:currentColor;stroke:none}
       </div>
     </div>
     <div class="pad">
-      <div id="btnL" class="sbtn l" data-b="l" aria-hidden="true">l</div>
-      <div id="btnR" class="sbtn r" data-b="r" aria-hidden="true">r</div>
+      <div id="btnL" class="sbtn l" data-b="l" data-label="l" aria-hidden="true"></div>
+      <div id="btnR" class="sbtn r" data-b="r" data-label="r" aria-hidden="true"></div>
       <div id="dpad" class="dpad" aria-hidden="true">
         <div class="arm up" data-b="up"></div>
         <div class="arm down" data-b="down"></div>
@@ -221,8 +225,8 @@ svg .fill{fill:currentColor;stroke:none}
       <div id="face" class="face" aria-hidden="true"></div>
       <div class="meta">
         <button id="menuBtn" class="icon menu-btn" type="button" aria-label="Menu" title="Menu"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
-        <div id="btnSelect" class="mbtn" data-b="select">select</div>
-        <div id="btnStart" class="mbtn" data-b="start">start</div>
+        <div id="btnSelect" class="mbtn" data-b="select" data-label="select" aria-hidden="true"></div>
+        <div id="btnStart" class="mbtn" data-b="start" data-label="start" aria-hidden="true"></div>
       </div>
     </div>
   </section>
@@ -826,7 +830,7 @@ function buildPad(lay){
   pl.classList.toggle('no-select', !lay.select);
   face.style.width = U(f.w); face.style.height = U(f.h); face.style.right = U(f.right);
   facePad = f.pad;
-  face.innerHTML = f.btns.map(([b, x, y, d]) => `<div class="fbtn" data-b="${b}" style="left:${U(x)};top:${U(y)};width:${U(d)};height:${U(d)};font-size:${U(Math.round(d * 0.3))}">${esc((lay.labels && lay.labels[b]) || b)}</div>`).join('');
+  face.innerHTML = f.btns.map(([b, x, y, d]) => `<div class="fbtn" data-b="${b}" style="left:${U(x)};top:${U(y)};width:${U(d)};height:${U(d)};font-size:${U(Math.round(d * 0.3))}" data-label="${esc((lay.labels && lay.labels[b]) || b)}"></div>`).join('');
   els = {};
   pl.querySelectorAll('[data-b]').forEach(el => els[el.dataset.b] = el);
 }
@@ -902,6 +906,7 @@ player.addEventListener('lostpointercapture', lift);
 player.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('touchmove', e => { if(!$('#player').hidden) e.preventDefault(); }, { passive:false });
+player.addEventListener('touchstart', e => { if(!e.target.closest('button')) e.preventDefault(); }, { passive:false });
 
 // keyboard for desktop: arrows, Z = B, X = A, A = Y, S = X, Q = L, W = R, Enter = Start, Shift = Select (sega: Z X C = A B C)
 const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyZ:'b', KeyX:'a', KeyA:'y', KeyS:'x', KeyQ:'l', KeyW:'r', Enter:'start', ShiftLeft:'select', ShiftRight:'select' };
