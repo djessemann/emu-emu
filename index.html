@@ -448,13 +448,20 @@ async function renderLibrary(){
 }
 
 // in-app confirm (same pattern as nesprite's confirmModal)
-let confirmResolve = null;
-function askConfirm(msg, yes){
+let confirmResolve = null, confirmTap = null;
+// tap: optional function run right inside the yes tap (starting a game needs that, for sound on iOS)
+function askConfirm(msg, yes, tap){
+  confirmTap = tap || null;
   $('#confirmMsg').textContent = msg; $('#confirmYes').textContent = yes;
   $('#confirm').hidden = false; $('#confirmYes').focus();
   return new Promise(res => { confirmResolve = res; });
 }
-function closeConfirm(v){ if(!confirmResolve) return; $('#confirm').hidden = true; const r = confirmResolve; confirmResolve = null; r(v); }
+function closeConfirm(v){
+  if(!confirmResolve) return; $('#confirm').hidden = true;
+  const r = confirmResolve, t = confirmTap; confirmResolve = null; confirmTap = null;
+  if(v && t) t();
+  r(v);
+}
 $('#confirmYes').addEventListener('click', () => closeConfirm(true));
 $('#confirmNo').addEventListener('click', () => closeConfirm(false));
 $('#confirm').addEventListener('click', e => { if(e.target.id === 'confirm') closeConfirm(false); });
@@ -764,7 +771,8 @@ async function startGame(id){
   setTimeout(() => { if(F && running && !paused && document.visibilityState === 'visible' && F.frame() === 0) crash(); }, 3000);
   meta.played = Date.now(); store.putMeta(meta).catch(()=>{});
   wake();
-  clearInterval(saveTimer); saveTimer = setInterval(() => { if(running && !paused) saveState(); }, 30000);
+  clearInterval(saveTimer); saveTimer = setInterval(() => { if(running && !paused) saveState(); }, 15000);
+  prefs.set('playing', id); // cleared when you leave the game; still set if iOS closed the page mid-game
   clearInterval(sramTimer); sramTimer = setInterval(flushSram, 2000);
 }
 function saveState(){
@@ -776,6 +784,7 @@ function showPlayer(){ $('#library').hidden = true; $('#player').hidden = false;
 async function exitGame(){
   if(F){ await saveState(); running = false; applyRun(); }
   clearInterval(saveTimer); clearInterval(sramTimer); releaseAll(); unwake();
+  prefs.set('playing', null);
   if(F || M){ location.reload(); return; } // frees the core's memory
   cur = null; $('#player').hidden = true; $('#library').hidden = false; renderLibrary();
 }
@@ -987,9 +996,20 @@ let storageWarning = '';
   if(!ok){ storageWarning = 'this browser blocks storage, so games are gone when you close the page.'; }
   else { try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){} }
   if(storageWarning){ noteEl.textContent = storageWarning; noteEl.hidden = false; }
-  renderLibrary();
+  await renderLibrary();
   requestAnimationFrame(loop);
+  offerResume();
 })();
+// iOS sometimes closes the page while you play (to free memory, or after a while in the background).
+// The game's progress was saved, so offer to jump back in. Starting needs a tap, for sound.
+async function offerResume(){
+  const id = prefs.get('playing', null);
+  if(!id) return;
+  let meta = null; try{ meta = await store.getMeta(id); }catch(e){}
+  if(!meta){ prefs.set('playing', null); return; }
+  const ok = await askConfirm(`resume ${meta.name}?`, 'resume', () => startGame(id));
+  if(!ok) prefs.set('playing', null);
+}
 })();
 </script>
 <script>

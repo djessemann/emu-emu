@@ -32,7 +32,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`emuemu-v10` → `v11` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell; everything else the app fetches is stored the first time it loads (runtime caching in the fetch handler).
+- **Bump `CACHE` in `sw.js`** (`emuemu-v11` → `v12` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell; everything else the app fetches is stored the first time it loads (runtime caching in the fetch handler).
 - Emulator cores (`vendor/<core>/<core>_libretro.js/.wasm`) go in a separate cache, `CORES` (`emu-cores-v1`), that survives app updates, so an update doesn't re-download 4–7 MB per system. The NES core is added to it on install. Bump `CORES` only if a core file itself changes (same file names after a core update). On activate, cores found in old app caches are moved into `CORES` before those caches are deleted.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
@@ -65,7 +65,7 @@ Taken from Delta's official iPhone portrait layouts (rileytestut/NESDeltaCore, S
 |---|---|---|
 | `meta` | `id` (keyPath) | `{id, name, file, size, sys, ext, mapper (NES only), added, played}`; `sys` is `nes`/`snes`/`gb`/`gba`/`sega` (missing = `nes`, from before multi-system), `ext` is the file type written into the core (`game.<ext>`) |
 | `data` | game id | ROM bytes (`Uint8Array`) |
-| `states` | game id | auto "resume" snapshot (core state bytes, `Uint8Array`), written on leave, app switch, and every 30s |
+| `states` | game id | auto "resume" snapshot (core state bytes, `Uint8Array`), written on leave, app switch, and every 15s |
 | `slots` | game id | the one manual save state `{at, s}`, `s` = core state bytes |
 | `sram` | game id | in-game battery save: the core's `.srm` file, copied every 2s when it changed (NES: 8 KB `$6000–$7FFF`, same bytes the old jsnes build stored) |
 
@@ -88,6 +88,7 @@ Taken from Delta's official iPhone portrait layouts (rileytestut/NESDeltaCore, S
 - Config: `RA_CFG` is written to `/home/web_user/.config/retroarch/retroarch.cfg`; core options are written through the `callbacks.setupCoreSettingFile` hook.
 - A core's script is loaded only when a game for it starts (`loadCoreScript`), because each defines the same global `EJS_Runtime`. Its wasm is fetched and compiled ahead of time for the tab you're on (`compileCore`, one kept at a time) and handed over with `instantiateWasm`.
 - `prepareCores` fetches the cores of every system you have games for, once, so the service worker stores them for offline play. It skips while a game is starting or running (downloading 4–7 MB cores mid-boot costs memory on iPhone). `compileCore` uses `WebAssembly.compileStreaming` (falls back to fetch + compile) and starts as soon as the library renders.
+- **Resume after iOS closes the page:** `prefs` key `playing` holds the open game's id from start until you leave it (`exitGame` clears it). If the page loads with it still set (iOS closed the page mid-game, or the app was swiped away), the library shows "resume {name}?" (`cancel` / `resume`). `resume` starts the game inside the tap (`askConfirm`'s third argument runs in the click, needed for iOS sound), and it picks up from the `states` snapshot.
 - **One game per page load.** Leaving a game saves and then reloads the page: each core instance holds a large heap and the old one isn't fully freed, so reloading is how memory stays flat on iPhone.
 - **Frame pacing:** `RA_CFG` sets `audio_sync = "false"` and `vrr_runloop_enable = "true"`. With audio sync on, the core blocks on the sound buffer, so the game froze (0 fps) whenever the AudioContext wasn't running: sound turned off, or iOS interrupting audio (calls, Siri, notifications, app switches). `vrr_runloop_enable` keeps the speed at the game's own rate on any screen (checked at 30 Hz = iPhone Low Power Mode, 60, 90, 120, 144 Hz); without it, sync off runs ~2x fast on 120 Hz screens. Sound stays gap-free (checked by timing the scheduled audio buffers).
 - If iOS stops the AudioContext, `fixSound()` resumes it on the context's `statechange`, on the next touch on the player, and on any key press.
