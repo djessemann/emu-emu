@@ -32,7 +32,8 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`emuemu-v9` → `v10` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell plus the NES core; everything else the app fetches, including the other cores, is stored the first time it loads (runtime caching in the fetch handler).
+- **Bump `CACHE` in `sw.js`** (`emuemu-v10` → `v11` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell; everything else the app fetches is stored the first time it loads (runtime caching in the fetch handler).
+- Emulator cores (`vendor/<core>/<core>_libretro.js/.wasm`) go in a separate cache, `CORES` (`emu-cores-v1`), that survives app updates, so an update doesn't re-download 4–7 MB per system. The NES core is added to it on install. Bump `CORES` only if a core file itself changes (same file names after a core update). On activate, cores found in old app caches are moved into `CORES` before those caches are deleted.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 
 ## How the app works
@@ -86,8 +87,10 @@ Taken from Delta's official iPhone portrait layouts (rileytestut/NESDeltaCore, S
 - The core's own keyboard input is off (its `parent` is a detached div, so its key listeners never fire) and its joypad driver is `null`; our touch/keyboard/gamepad code feeds every button.
 - Config: `RA_CFG` is written to `/home/web_user/.config/retroarch/retroarch.cfg`; core options are written through the `callbacks.setupCoreSettingFile` hook.
 - A core's script is loaded only when a game for it starts (`loadCoreScript`), because each defines the same global `EJS_Runtime`. Its wasm is fetched and compiled ahead of time for the tab you're on (`compileCore`, one kept at a time) and handed over with `instantiateWasm`.
-- `prepareCores` fetches the cores of every system you have games for, once, so the service worker stores them for offline play.
+- `prepareCores` fetches the cores of every system you have games for, once, so the service worker stores them for offline play. It skips while a game is starting or running (downloading 4–7 MB cores mid-boot costs memory on iPhone). `compileCore` uses `WebAssembly.compileStreaming` (falls back to fetch + compile) and starts as soon as the library renders.
 - **One game per page load.** Leaving a game saves and then reloads the page: each core instance holds a large heap and the old one isn't fully freed, so reloading is how memory stays flat on iPhone.
+- **Frame pacing:** `RA_CFG` sets `audio_sync = "false"` and `vrr_runloop_enable = "true"`. With audio sync on, the core blocks on the sound buffer, so the game froze (0 fps) whenever the AudioContext wasn't running: sound turned off, or iOS interrupting audio (calls, Siri, notifications, app switches). `vrr_runloop_enable` keeps the speed at the game's own rate on any screen (checked at 30 Hz = iPhone Low Power Mode, 60, 90, 120, 144 Hz); without it, sync off runs ~2x fast on 120 Hz screens. Sound stays gap-free (checked by timing the scheduled audio buffers).
+- If iOS stops the AudioContext, `fixSound()` resumes it on the context's `statechange`, on the next touch on the player, and on any key press.
 - Audio: the core creates its own AudioContext after the tap, which iOS would keep muted. `window.AudioContext` is wrapped so the core gets a context made (and resumed) inside the tap. Pause and the sound toggle suspend/resume that context.
 - Draws with WebGL on a fresh clone of `#screen` per game (a canvas can't switch from 2D to WebGL).
 - Testing: there are no real games in the repo. Hand-assembled test ROMs per system (red screen, a different color while a button is held) are a quick way to check boot, input mapping and save states in Playwright.

@@ -549,7 +549,12 @@ const RA_CFG = [
   'savefile_directory = "/data/saves"', 'sort_savefiles_enable = "false"', 'sort_savefiles_by_content_enable = "false"',
   'savestate_auto_save = "false"', 'savestate_auto_load = "false"', 'autosave_interval = "0"', 'block_sram_overwrite = "false"',
   'video_smooth = "false"', 'video_vsync = "true"', 'video_font_enable = "false"', 'fps_show = "false"', 'audio_latency = "64"',
-  'input_joypad_driver = "null"', 'input_autodetect_enable = "false"', 'pause_nonactive = "false"'
+  'input_joypad_driver = "null"', 'input_autodetect_enable = "false"', 'pause_nonactive = "false"',
+  // Pace frames by the clock, not by the sound card. With audio sync on, the core stops dead whenever the
+  // AudioContext isn't running (sound turned off, or iOS interrupts audio for a call, Siri, a notification or an
+  // app switch), so the game froze. vrr_runloop_enable keeps the speed right at any screen rate (30 Hz in Low
+  // Power Mode, 120 Hz ProMotion), which audio sync used to do.
+  'audio_sync = "false"', 'vrr_runloop_enable = "true"'
 ].join('\n') + '\n';
 let BTN = IDS; // button name -> libretro id for the game that's open
 
@@ -563,7 +568,10 @@ let wasmP = null, wasmSys = null;
 function compileCore(sys){
   if(wasmSys !== sys || !wasmP){
     wasmSys = sys;
-    const p = wasmP = fetch(coreUrl(sys, 'wasm')).then(r => { if(!r.ok) throw new Error('core'); return r.arrayBuffer(); }).then(b => WebAssembly.compile(b));
+    const url = coreUrl(sys, 'wasm');
+    const slow = () => fetch(url).then(r => { if(!r.ok) throw new Error('core'); return r.arrayBuffer(); }).then(b => WebAssembly.compile(b));
+    // compile while it downloads where the browser can; fall back to the plain way (e.g. wrong MIME type)
+    const p = wasmP = (WebAssembly.compileStreaming ? WebAssembly.compileStreaming(fetch(url)).catch(slow) : slow());
     p.catch(() => { if(wasmP === p) wasmP = null; });
   }
   return wasmP;
@@ -581,13 +589,14 @@ function prepareCores(all){
   const used = new Set(all.map(sysOf));
   setTimeout(async () => {
     for(const sys of used){
+      if(starting || F) return; // don't download other cores while a game is starting or running
       for(const kind of ['js','wasm']){
-        const url = coreUrl(sys, kind); if(fetched.has(url)) continue; fetched.add(url);
+        const url = coreUrl(sys, kind); if(fetched.has(url) || starting || F) continue; fetched.add(url);
         try{ if(window.caches && await caches.match(url)) continue; await fetch(url); }catch(e){ fetched.delete(url); }
       }
     }
   }, 1500);
-  if(used.has(tab)) setTimeout(() => compileCore(tab).catch(()=>{}), 300);
+  if(used.has(tab) && !starting && !F) compileCore(tab).catch(()=>{});
 }
 
 // audio: the core makes its own AudioContext once it starts, which is after the tap, so iOS would keep it muted.
@@ -600,6 +609,7 @@ if(RealAC){
     if(spareAC && !(opts && opts.sampleRate && opts.sampleRate !== spareAC.sampleRate)){ c = spareAC; spareAC = null; }
     else c = opts ? new RealAC(opts) : new RealAC();
     coreAC = c; setTimeout(applyRun, 0);
+    try{ c.addEventListener('statechange', () => setTimeout(fixSound, 300)); }catch(e){}
     return c;
   };
   AC.prototype = RealAC.prototype;
@@ -621,6 +631,10 @@ function applyRun(){
   if(F){ try{ F.loop(go ? 1 : 0); }catch(e){} }
   if(coreAC){ try{ (go && soundOn) ? coreAC.resume() : coreAC.suspend(); }catch(e){} }
 }
+// iOS stops the sound for calls, Siri, notifications and app switches, and doesn't always restart it.
+// Try again when that happens and on the next touch (iOS only allows it inside a tap sometimes).
+function wantSound(){ return !!F && running && !paused && soundOn && $('#error').hidden; }
+function fixSound(){ if(coreAC && coreAC.state !== 'running' && wantSound()){ try{ coreAC.resume(); }catch(e){} } }
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
 
 function getState(){
@@ -884,6 +898,7 @@ function releaseAll(){ touches.clear(); keys.clear(); sync(); }
 
 const player = $('#player');
 player.addEventListener('pointerdown', e => {
+  fixSound();
   if(e.target.closest('button') || padMode) return;
   measure();
   const zone = zoneAt(e.clientX, e.clientY);
@@ -912,7 +927,7 @@ player.addEventListener('touchstart', e => { if(!e.target.closest('button')) e.p
 const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyZ:'b', KeyX:'a', KeyA:'y', KeyS:'x', KeyQ:'l', KeyW:'r', Enter:'start', ShiftLeft:'select', ShiftRight:'select' };
 const KEYMAP_SEGA = Object.assign({}, KEYMAP, { KeyZ:'a', KeyX:'b', KeyC:'c' });
 const keyFor = code => (cur && sysOf(cur) === 'sega' && BTN.c !== undefined ? KEYMAP_SEGA : KEYMAP)[code];
-addEventListener('keydown', e => { const b = keyFor(e.code); if(!b || $('#player').hidden || !$('#confirm').hidden || !$('#menu').hidden) return; e.preventDefault(); keys.add(b); sync(); });
+addEventListener('keydown', e => { fixSound(); const b = keyFor(e.code); if(!b || $('#player').hidden || !$('#confirm').hidden || !$('#menu').hidden) return; e.preventDefault(); keys.add(b); sync(); });
 addEventListener('keyup', e => { const b = keyFor(e.code); if(!b) return; keys.delete(b); sync(); });
 
 /* ================= physical controllers (gameplay only) ================= */
