@@ -32,7 +32,7 @@ CLAUDE.md
 
 - No build step, no framework, no npm at runtime. Same spirit as the owner's `nesprite` and `nes-tracker` repos.
 - **`index.html` must stay at the repo root** or Pages renders the README instead.
-- **Bump `CACHE` in `sw.js`** (`emuemu-v13` → `v14` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell; everything else the app fetches is stored the first time it loads (runtime caching in the fetch handler).
+- **Bump `CACHE` in `sw.js`** (`emuemu-v14` → `v15` …) whenever any file changes, or installed users keep the stale version. `ASSETS` (stored on install) is the app shell; everything else the app fetches is stored the first time it loads (runtime caching in the fetch handler).
 - Emulator cores (`vendor/<core>/<core>_libretro.js/.wasm`) go in a separate cache, `CORES` (`emu-cores-v1`), that survives app updates, so an update doesn't re-download 4–7 MB per system. The NES core is added to it on install. Bump `CORES` only if a core file itself changes (same file names after a core update). On activate, cores found in old app caches are moved into `CORES` before those caches are deleted.
 - Keep everything self-contained: no external fonts, scripts or fetches, or offline breaks.
 

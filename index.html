@@ -452,7 +452,7 @@ async function renderLibrary(){
   listEl.innerHTML = roms.map(r => `<li class="rom" data-id="${r.id}">
       <button class="rom-play" data-act="play" type="button"><span class="rom-name">${esc(r.name)}</span></button>
       <button class="rom-ren icon" data-act="ren" type="button" aria-label="Rename ${esc(r.name)}">${PEN_ICON}</button>
-      <button class="rom-del icon" data-act="del" type="button" aria-label="Remove ${esc(r.name)}">${X_ICON}</button></li>`).join('');
+      <button class="rom-del icon" data-act="del" type="button" aria-label="Delete ${esc(r.name)}">${X_ICON}</button></li>`).join('');
 }
 
 // in-app confirm (same pattern as nesprite's confirmModal)
@@ -498,7 +498,7 @@ listEl.addEventListener('click', async e => {
     renderLibrary(); return;
   }
   if(btn.dataset.act === 'play'){ startGame(id); return; }
-  if(await askConfirm(`remove ${name} and its saves?`, 'remove')){
+  if(await askConfirm(`delete ${name} and its saves?`, 'delete')){
     try{ await store.remove(id); }catch(e){}
     renderLibrary();
   }
@@ -739,7 +739,7 @@ async function startGame(id){
   starting = true;
   let meta, data;
   try{ meta = await store.getMeta(id); data = await store.getData(id); }catch(e){}
-  if(!meta || !data){ starting = false; noteEl.textContent = 'couldn’t open that game. remove it and add it again.'; noteEl.hidden = false; return; }
+  if(!meta || !data){ starting = false; noteEl.textContent = 'couldn’t open that game. delete it and add it again.'; noteEl.hidden = false; return; }
   cur = meta;
   const sys = sysOf(meta), lay = layoutOf(meta);
   buildPad(lay);
