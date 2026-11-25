@@ -4,7 +4,7 @@
 // install; every other file the app fetches (the other systems' cores) is stored the first time it loads.
 // Bump CACHE whenever any file changes, or installed users keep the old version.
 // Bump CORES only if a file under vendor/<core>/ changes (a core update keeps the same file names).
-const CACHE = 'emuemu-v12';
+const CACHE = 'emuemu-v13';
 const CORES = 'emu-cores-v1';
 const ASSETS = [
   './',
